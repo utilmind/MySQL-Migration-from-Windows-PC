@@ -1,7 +1,11 @@
 @echo off
 REM ============ DEFAULT CONFIG (used if no args are passed) ============
-set "MDBBIN=C:\Program Files\MariaDB 10.5\bin"
-set "OUTDIR=D:\4\db_dumps_temp"
+set "SQLBIN=C:\Program Files\MariaDB 10.5\bin"
+REM set "SQLCLI=mariadb.exe"
+set "SQLCLI=mysql.exe"
+REM set "SQLDUMP=mariadb-dump.exe"
+set "SQLDUMP=mysqldump.exe"
+set "OUTDIR=D:\_db-dumps"
 set "HOST=localhost"
 set "PORT=3306"
 set "USER=root"
@@ -12,9 +16,9 @@ chcp 65001 >nul
 setlocal EnableExtensions EnableDelayedExpansion
 
 REM --------- Override config from arguments if provided ----------
-REM Arg1: MDBBIN, Arg2: OUTDIR, Arg3: HOST, Arg4: PORT, Arg5: USER, Arg6: PASS
+REM Arg1: SQLBIN, Arg2: OUTDIR, Arg3: HOST, Arg4: PORT, Arg5: USER, Arg6: PASS
 
-if not "%~1"=="" set "MDBBIN=%~1"
+if not "%~1"=="" set "SQLBIN=%~1"
 if not "%~2"=="" set "OUTDIR=%~2"
 if not "%~3"=="" set "HOST=%~3"
 if not "%~4"=="" set "PORT=%~4"
@@ -22,14 +26,14 @@ if not "%~5"=="" set "USER=%~5"
 if not "%~6"=="" set "PASS=%~6"
 REM ----------------------------------------------------------------
 
-if not exist "%MDBBIN%\mariadb.exe" (
-  echo ERROR: mariadb.exe not found at "%MDBBIN%".
+if not exist "%SQLBIN%\%SQLCLI%.exe" (
+  echo ERROR: %SQLCLI% not found at "%SQLBIN%".
   goto :end
 )
 
 REM Ask for password only if PASS is empty after overrides
 if "%PASS%"=="" (
-  echo Enter password for %USER%@%HOST% ^(input will be visible^)
+  echo Enter password for %USER%@%HOST% ^(INPUT WILL BE VISIBLE^)
   set /p "PASS=> "
   echo.
 )
@@ -45,9 +49,11 @@ del "%USERDUMP%" 2>nul
 
 echo === Exporting users and grants to "%USERDUMP%" ===
 
-REM Get list of users@hosts; adjust WHERE if you want to skip system accounts
-"%MDBBIN%\mariadb.exe" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B ^
-  -e "SELECT CONCAT('''',User,'''@''',Host,'''') FROM mysql.user WHERE User<>''" > "%USERLIST%"
+REM Get list of users@hosts; skip system accounts like root, mariadb.sys, mysql.sys, mysql.session
+"%SQLBIN%\%SQLCLI%" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B ^
+  -e "SELECT CONCAT('''',User,'''@''',Host,'''') FROM mysql.user
+      WHERE User<>''
+        AND User NOT IN ('root','mariadb.sys','mysql.sys','mysql.session')" > "%USERLIST%"
 
 if errorlevel 1 (
   echo ERROR: Could not retrieve user list. See "%LOG%" for details.
@@ -61,7 +67,7 @@ echo.>> "%USERDUMP%"
 
 for /f "usebackq delims=" %%U in ("%USERLIST%") do (
   echo -- Grants for %%U>>"%USERDUMP%"
-  "%MDBBIN%\mariadb.exe" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B ^
+  "%SQLBIN%\%SQLCLI%" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B ^
     -e "SHOW GRANTS FOR %%U" >> "%USERDUMP%" 2>>"%LOG%"
   echo.>>"%USERDUMP%"
 )

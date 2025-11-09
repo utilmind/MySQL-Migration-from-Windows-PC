@@ -1,10 +1,14 @@
 @echo off
 REM ================== CONFIG ==================
 REM Path to MariaDB folder (old server)
-set "MDBBIN=C:\Program Files\MariaDB 10.5\bin"
+set "SQLBIN=C:\Program Files\MariaDB 10.5\bin"
+REM set "SQLCLI=mariadb.exe"
+set "SQLCLI=mysql.exe"
+REM set "SQLDUMP=mariadb-dump.exe"
+set "SQLDUMP=mysqldump.exe"
 
 REM Output folder for dumps (will be created if missing)
-set "OUTDIR=D:\4\db_dumps_temp"
+set "OUTDIR=D:\_db-dumps"
 
 REM Connection params (leave HOST/PORT default if local)
 set "HOST=localhost"
@@ -25,18 +29,18 @@ chcp 65001 >nul
 setlocal EnableExtensions EnableDelayedExpansion
 
 REM Ensure tools exist
-if not exist "%MDBBIN%\mariadb.exe" (
-  echo ERROR: mariadb.exe not found at "%MDBBIN%".
+if not exist "%SQLBIN%\%SQLCLI%" (
+  echo ERROR: %SQLCLI% not found at "%SQLBIN%".
   goto :end
 )
-if not exist "%MDBBIN%\mariadb-dump.exe" (
-  echo ERROR: mariadb-dump.exe not found at "%MDBBIN%".
+if not exist "%SQLBIN%\%SQLDUMP%" (
+  echo ERROR: %SQLDUMP% not found at "%SQLBIN%".
   goto :end
 )
 
 REM Ask for password only if PASS is empty
 if "%PASS%"=="" (
-  echo Enter password for %USER%@%HOST% ^(input will be visible^)
+  echo Enter password for %USER%@%HOST% ^(INPUT WILL BE VISIBLE^)
   set /p "PASS=> "
   echo.
 )
@@ -62,7 +66,7 @@ echo === Dumping ALL databases into ONE file (including 'mysql', system db, whic
 set "OUTFILE=%OUTDIR%\all_databases.sql"
 echo Output: "%OUTFILE%"
 
-"%MDBBIN%\mariadb-dump.exe" -h %HOST% -P %PORT% -u %USER% -p%PASS% ^
+"%SQLBIN%\%SQLDUMP%" -h %HOST% -P %PORT% -u %USER% -p%PASS% ^
   --all-databases %COMMON_OPTS% --result-file="%OUTFILE%"
 
 if errorlevel 1 (
@@ -82,7 +86,7 @@ for %%D in (%*) do (
   set "OUTFILE=%OUTDIR%\!DB!.sql"
   echo.
   echo --- Dumping database: !DB!  ^> "!OUTFILE!"
-  "%MDBBIN%\mariadb-dump.exe" -h %HOST% -P %PORT% -u %USER% -p%PASS% --databases "!DB!" %COMMON_OPTS% --result-file="!OUTFILE!"
+  "%SQLBIN%\%SQLDUMP%" -h %HOST% -P %PORT% -u %USER% -p%PASS% --databases "!DB!" %COMMON_OPTS% --result-file="!OUTFILE!"
   if errorlevel 1 (
     echo [%DATE% %TIME%] ERROR dumping !DB! >> "%LOG%"
     echo     ^- See "%LOG%" for details.
@@ -99,7 +103,7 @@ echo === Getting database list from %HOST%:%PORT% ...
 set "DBLIST=%OUTDIR%\_dblist.txt"
 
 REM Write databases to a file to avoid quoting issues with "Program Files"
-"%MDBBIN%\mariadb.exe" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B -e "SHOW DATABASES" > "%DBLIST%"
+"%SQLBIN%\%SQLCLI%" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B -e "SHOW DATABASES" > "%DBLIST%"
 if errorlevel 1 (
   echo ERROR: Could not retrieve database list.
   goto :after_dumps
@@ -112,7 +116,7 @@ for /f "usebackq delims=" %%D in ("%DBLIST%") do (
     set "OUTFILE=%OUTDIR%\!DB!.sql"
     echo.
     echo --- Dumping database: !DB!  ^> "!OUTFILE!"
-    "%MDBBIN%\mariadb-dump.exe" -h %HOST% -P %PORT% -u %USER% -p%PASS% --databases "!DB!" %COMMON_OPTS% --result-file="!OUTFILE!"
+    "%SQLBIN%\%SQLDUMP%.exe" -h %HOST% -P %PORT% -u %USER% -p%PASS% --databases "!DB!" %COMMON_OPTS% --result-file="!OUTFILE!"
     if errorlevel 1 (
       echo [%DATE% %TIME%] ERROR dumping !DB! >> "%LOG%"
       echo     ^- See "%LOG%" for details.
@@ -133,7 +137,7 @@ REM Optionally export users and grants via external script
 if "%EXPORT_USERS_AND_GRANTS%"=="1" (
   echo.
   echo === Exporting users and grants using export-users-and-grants.bat ===
-  @call "%~dp0export-users-and-grants.bat" "%MDBBIN%" "%OUTDIR%" "%HOST%" "%PORT%" "%USER%" "%PASS%"
+  @call "%~dp0export-users-and-grants.bat" "%SQLBIN%" "%OUTDIR%" "%HOST%" "%PORT%" "%USER%" "%PASS%"
 )
 
 if exist "%LOG%" (
