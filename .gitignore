@@ -4,3 +4,4 @@
 *.dll
 *.txt
 *.log
+/ps-version
