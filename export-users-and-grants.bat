@@ -1,14 +1,17 @@
 @echo off
 REM ============ DEFAULT CONFIG (used if no args are passed) ============
+REM Path to bin folder (MariaDB or MySQL)
 set "SQLBIN=C:\Program Files\MariaDB 10.5\bin"
-REM set "SQLCLI=mariadb.exe"
+REM Client executable name: mysql.exe or mariadb.exe / mysqldump.exe or mariadb-dump.exe.
 set "SQLCLI=mysql.exe"
-REM set "SQLDUMP=mariadb-dump.exe"
 set "SQLDUMP=mysqldump.exe"
+REM Output folder for users_and_grants.sql
 set "OUTDIR=D:\_db-dumps"
+REM Connection params
 set "HOST=localhost"
 set "PORT=3306"
 set "USER=root"
+REM Password: put real password here, or leave empty to be prompted
 set "PASS="
 REM =====================================================================
 
