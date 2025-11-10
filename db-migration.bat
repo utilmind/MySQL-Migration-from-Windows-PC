@@ -24,6 +24,8 @@ set "COMMON_OPTS=--single-transaction --routines --events --triggers --hex-blob 
 REM If you want to automatically export users/grants, set this to 1 and ensure the second .bat exists
 set "EXPORT_USERS_AND_GRANTS=1"
 REM ============================================
+REM Temporary file for the list of databases
+set "DBLIST=%OUTDIR%\^db-list.txt"
 
 chcp 65001 >nul
 setlocal EnableExtensions EnableDelayedExpansion
@@ -47,6 +49,15 @@ if "%PASS%"=="" (
 
 if not exist "%OUTDIR%" mkdir "%OUTDIR%"
 
+echo === Getting database list from %HOST%:%PORT% ...
+"%SQLBIN%\%SQLCLI%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% -N -B -e "SHOW DATABASES" > "%DBLIST%"
+REM AK: Alternatively we could use `SELECT DISTINCT TABLE_SCHEMA FROM information_schema.TABLES WHERE TABLE_SCHEMA NOT IN ("information_schema", "performance_schema", "mysql", "sys");`,
+REM     this way could exclude system tables immediately, but this doesn't exports *empty* databases (w/o tables yet), which still could be important. So let's keep canonical SHOW DATABASES, then filter it.
+if errorlevel 1 (
+  echo ERROR: Could not retrieve database list.
+  goto :after_dumps
+)
+
 set "LOG=%OUTDIR%\_dump_errors.log"
 del "%LOG%" 2>nul
 
@@ -67,15 +78,6 @@ echo === Dumping ALL NON-SYSTEM databases into ONE file (excluding mysql, inform
 set "OUTFILE=%OUTDIR%\_all_databases.sql"
 echo Output: "%OUTFILE%"
 
-REM Get database list into a temp file
-set "DBLIST=%OUTDIR%\^db-list.txt"
-
-"%SQLBIN%\%SQLCLI%" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B -e "SHOW DATABASES" > "%DBLIST%"
-if errorlevel 1 (
-  echo ERROR: Could not retrieve database list.
-  goto :after_dumps
-)
-
 REM Build a list of non-system database names
 set "DBNAMES="
 for /f "usebackq delims=" %%D in ("%DBLIST%") do (
@@ -85,7 +87,7 @@ for /f "usebackq delims=" %%D in ("%DBLIST%") do (
   )
 )
 
-del "%DBLIST%" 2>nul
+rem del "%DBLIST%" 2>nul
 
 if "!DBNAMES!"=="" (
   echo No non-system databases found.
@@ -107,15 +109,6 @@ goto :after_dumps
 
 REM ================== MODE 3: ALL DATABASES SEPARATELY (DEFAULT) ==================
 :all_separate
-echo === Getting database list from %HOST%:%PORT% ...
-set "DBLIST=%OUTDIR%\_dblist.txt"
-
-REM Write databases to a file to avoid quoting issues with "Program Files"
-"%SQLBIN%\%SQLCLI%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% -N -B -e "SHOW DATABASES" > "%DBLIST%"
-if errorlevel 1 (
-  echo ERROR: Could not retrieve database list.
-  goto :after_dumps
-)
 
 for /f "usebackq delims=" %%D in ("%DBLIST%") do (
   set "DB=%%D"
