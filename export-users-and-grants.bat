@@ -14,9 +14,9 @@ set "USER=root"
 REM Password: put real password here, or leave empty to be prompted
 set "PASS="
 REM =====================================================================
-
-chcp 65001 >nul
-setlocal EnableExtensions EnableDelayedExpansion
+set "LOG=%OUTDIR%\^!users_errors.log"
+set "USERLIST=%OUTDIR%\^!userlist.txt"
+set "USERDUMP=%OUTDIR%\users_and_grants.sql"
 
 REM --------- Override config from arguments if provided ----------
 REM Arg1: SQLBIN, Arg2: OUTDIR, Arg3: HOST, Arg4: PORT, Arg5: USER, Arg6: PASS
@@ -43,12 +43,14 @@ if "%PASS%"=="" (
 
 if not exist "%OUTDIR%" mkdir "%OUTDIR%"
 
-set "LOG=%OUTDIR%\_users_errors.log"
-set "USERLIST=%OUTDIR%\_userlist.txt"
-set "USERDUMP=%OUTDIR%\users_and_grants.sql"
 del "%LOG%" 2>nul
 del "%USERLIST%" 2>nul
 del "%USERDUMP%" 2>nul
+
+
+REM After variables are set, so we can use ^! to escape !. Before export.
+setlocal EnableExtensions EnableDelayedExpansion
+chcp 65001 >nul
 
 echo === Exporting users and grants to "%USERDUMP%" ===
 
@@ -79,6 +81,11 @@ for /f "usebackq delims=" %%U in ("%USERLIST%") do (
 echo SET sql_log_bin=1;>> "%USERDUMP%"
 echo.
 echo === Users and grants saved to: "%USERDUMP%"
+
+REM If log file exists but is empty (0 bytes), delete it
+if exist "%LOG%" (
+  for %%F in ("%LOG%") do if %%~zF EQU 0 del "%%F"
+)
 
 if exist "%LOG%" (
   echo Some errors were recorded in: %LOG%
