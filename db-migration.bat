@@ -1,4 +1,7 @@
 @echo off
+REM ====== `db-migration.bat ALL` = make a full dump of all databases and users/grants ======
+
+
 REM ================== CONFIG ==================
 REM Path to bin folder containing mysql/mysqldump or mariadb/mariadb-dump
 set "SQLBIN=C:\Program Files\MariaDB 10.5\bin"
@@ -21,11 +24,14 @@ REM Dump options common for all databases
 REM --skip-extended-insert: one-row-per-INSERT (easier to debug, avoids huge packets)
 set "COMMON_OPTS=--single-transaction --routines --events --triggers --hex-blob --default-character-set=utf8mb4 --skip-extended-insert --add-drop-database --force"
 
-REM If you want to automatically export users/grants, set this to 1 and ensure the second .bat exists
+REM If you want to automatically export users/grants, set this to 1 and ensure the second .bat exists. Included in the beginning of FULL dump, if 
 set "EXPORT_USERS_AND_GRANTS=1"
 REM ============================================
+REM Filename used if we dump ALL databases
+set "OUTFILE=%OUTDIR%\_all_databases.sql"
 REM Temporary file for the list of databases
 set "DBLIST=%OUTDIR%\^db-list.txt"
+
 
 chcp 65001 >nul
 setlocal EnableExtensions EnableDelayedExpansion
@@ -48,6 +54,16 @@ if "%PASS%"=="" (
 )
 
 if not exist "%OUTDIR%" mkdir "%OUTDIR%"
+
+
+REM Optionally export users and grants via the separate script.
+REM Important to prepare it in the beginning, to include to the _all_databases export.
+if "%EXPORT_USERS_AND_GRANTS%"=="1" (
+  echo.
+  echo === Exporting users and grants using export-users-and-grants.bat ===
+  @call "%~dp0export-users-and-grants.bat" "%SQLBIN%" "%OUTDIR%" "%HOST%" "%PORT%" "%USER%" "%PASS%"
+)
+
 
 echo === Getting database list from %HOST%:%PORT% ...
 "%SQLBIN%\%SQLCLI%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% -N -B -e "SHOW DATABASES" > "%DBLIST%"
@@ -75,7 +91,6 @@ goto :selected_only
 REM ================== MODE 1: ALL DATABASES INTO ONE FILE ==================
 :all_in_one
 echo === Dumping ALL NON-SYSTEM databases into ONE file (excluding mysql, information_schema, performance_schema, sys) ===
-set "OUTFILE=%OUTDIR%\_all_databases.sql"
 echo Output: "%OUTFILE%"
 
 REM Build a list of non-system database names
@@ -133,13 +148,6 @@ REM ================== AFTER DUMPS ==================
 :after_dumps
 echo.
 echo === Database dumps are in: %OUTDIR%
-
-REM Optionally export users and grants via the separate script (BTW order of export is not important. But it's really important to IMPORT users/privileges BEFORE the data on clean MySQL server!)
-if "%EXPORT_USERS_AND_GRANTS%"=="1" (
-  echo.
-  echo === Exporting users and grants using export-users-and-grants.bat ===
-  @call "%~dp0export-users-and-grants.bat" "%SQLBIN%" "%OUTDIR%" "%HOST%" "%PORT%" "%USER%" "%PASS%"
-)
 
 if exist "%LOG%" (
   echo.
