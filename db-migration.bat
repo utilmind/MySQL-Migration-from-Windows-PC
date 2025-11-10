@@ -63,7 +63,7 @@ goto :selected_only
 REM ================== MODE 1: ALL DATABASES INTO ONE FILE ==================
 :all_in_one
 echo === Dumping ALL databases into ONE file (including 'mysql', system db, which handle user/grants) ===
-set "OUTFILE=%OUTDIR%\all_databases.sql"
+set "OUTFILE=%OUTDIR%\_all_databases.sql"
 echo Output: "%OUTFILE%"
 
 "%SQLBIN%\%SQLDUMP%" -h %HOST% -P %PORT% -u %USER% -p%PASS% ^
@@ -133,7 +133,7 @@ REM ================== AFTER DUMPS ==================
 echo.
 echo === Database dumps are in: %OUTDIR%
 
-REM Optionally export users and grants via external script
+REM Optionally export users and grants via external script (BTW order of export is not important. But it's really important to IMPORT users/privileges BEFORE the data on clean MySQL server!)
 if "%EXPORT_USERS_AND_GRANTS%"=="1" (
   echo.
   echo === Exporting users and grants using export-users-and-grants.bat ===
