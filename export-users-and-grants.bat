@@ -14,20 +14,11 @@ REM Password: put real password here, or leave empty to be prompted
 set "PASS="
 REM ================================
 
-chcp 65001 >nul
-
 REM Check client exists
 if not exist "%SQLBIN%\%SQLCLI%" (
   echo ERROR: %SQLCLI% not found at "%SQLBIN%".
   goto :end
 )
-
-REM Ask for password only if PASS is empty
-rem if "%PASS%"=="" (
-rem   echo Enter password for %USER%@%HOST% ^(input will be visible^)
-rem  set /p "PASS=> "
-rem  echo.
-rem )
 
 REM Run PowerShell script (export-users-and-grants.ps1 in same folder)
 powershell -ExecutionPolicy Bypass -File "%~dp0export-users-and-grants.ps1" ^
