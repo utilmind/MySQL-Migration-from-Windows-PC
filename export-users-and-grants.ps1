@@ -42,7 +42,7 @@ Remove-Item $outFile,$logFile -ErrorAction SilentlyContinue
 
 Write-Host "Exporting users and grants to $outFile"
 
-# --- Helper: run mysql client and return lines ---
+# --- Helper: run mysql/mariadb client and return lines ---
 function Invoke-SqlCli {
     param(
         [string]$Query
@@ -51,9 +51,7 @@ function Invoke-SqlCli {
 }
 
 # --- 1. Get list of users@hosts (excluding system accounts) ---
-$skipSet = [System.Collections.Generic.HashSet[string]]::new(
-    [StringComparer]::OrdinalIgnoreCase
-)
+$skipSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $SkipUsers | ForEach-Object { [void]$skipSet.Add($_) }
 
 $userQuery = @"
@@ -62,13 +60,10 @@ FROM mysql.user
 WHERE User <> ''
 "@
 
-# If you want to skip system users directly in SQL, you can add:
-#   AND User NOT IN ('root','mariadb.sys','mysql.sys','mysql.session')
-
 $rawUsers = Invoke-SqlCli -Query $userQuery
 
 if (-not $rawUsers) {
-    Write-Warning "No users found or query failed. See $logFile if exists."
+    Write-Warning "No users found or query failed. See $logFile if it exists."
 }
 
 # Normalize user@host list and skip system accounts
