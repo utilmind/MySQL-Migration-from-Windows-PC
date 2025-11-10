@@ -1,84 +1,42 @@
 @echo off
 REM ============ DEFAULT CONFIG (used if no args are passed) ============
+REM Path to bin folder (MariaDB or MySQL)
 set "SQLBIN=C:\Program Files\MariaDB 10.5\bin"
-REM set "SQLCLI=mariadb.exe"
+REM Client executable name: mysql.exe or mariadb.exe
 set "SQLCLI=mysql.exe"
-REM set "SQLDUMP=mariadb-dump.exe"
-set "SQLDUMP=mysqldump.exe"
+REM Output folder for users_and_grants.sql
 set "OUTDIR=D:\_db-dumps"
+REM Connection params
 set "HOST=localhost"
 set "PORT=3306"
 set "USER=root"
+REM Password: put real password here, or leave empty to be prompted
 set "PASS="
-REM =====================================================================
+REM ================================
 
 chcp 65001 >nul
-setlocal EnableExtensions EnableDelayedExpansion
 
-REM --------- Override config from arguments if provided ----------
-REM Arg1: SQLBIN, Arg2: OUTDIR, Arg3: HOST, Arg4: PORT, Arg5: USER, Arg6: PASS
-
-if not "%~1"=="" set "SQLBIN=%~1"
-if not "%~2"=="" set "OUTDIR=%~2"
-if not "%~3"=="" set "HOST=%~3"
-if not "%~4"=="" set "PORT=%~4"
-if not "%~5"=="" set "USER=%~5"
-if not "%~6"=="" set "PASS=%~6"
-REM ----------------------------------------------------------------
-
-if not exist "%SQLBIN%\%SQLCLI%.exe" (
+REM Check client exists
+if not exist "%SQLBIN%\%SQLCLI%" (
   echo ERROR: %SQLCLI% not found at "%SQLBIN%".
   goto :end
 )
 
-REM Ask for password only if PASS is empty after overrides
-if "%PASS%"=="" (
-  echo Enter password for %USER%@%HOST% ^(INPUT WILL BE VISIBLE^)
-  set /p "PASS=> "
-  echo.
-)
+REM Ask for password only if PASS is empty
+rem if "%PASS%"=="" (
+rem   echo Enter password for %USER%@%HOST% ^(input will be visible^)
+rem  set /p "PASS=> "
+rem  echo.
+rem )
 
-if not exist "%OUTDIR%" mkdir "%OUTDIR%"
-
-set "LOG=%OUTDIR%\_users_errors.log"
-set "USERLIST=%OUTDIR%\_userlist.txt"
-set "USERDUMP=%OUTDIR%\users_and_grants.sql"
-del "%LOG%" 2>nul
-del "%USERLIST%" 2>nul
-del "%USERDUMP%" 2>nul
-
-echo === Exporting users and grants to "%USERDUMP%" ===
-
-REM Get list of users@hosts; skip system accounts like root, mariadb.sys, mysql.sys, mysql.session
-"%SQLBIN%\%SQLCLI%" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B ^
-  -e "SELECT CONCAT('''',User,'''@''',Host,'''') FROM mysql.user
-      WHERE User<>''
-        AND User NOT IN ('root','mariadb.sys','mysql.sys','mysql.session')" > "%USERLIST%"
-
-if errorlevel 1 (
-  echo ERROR: Could not retrieve user list. See "%LOG%" for details.
-  goto :end
-)
-
-REM Optional header
-echo -- Users and grants exported from %HOST%:%PORT% on %DATE% %TIME%> "%USERDUMP%"
-echo SET sql_log_bin=0;>> "%USERDUMP%"
-echo.>> "%USERDUMP%"
-
-for /f "usebackq delims=" %%U in ("%USERLIST%") do (
-  echo -- Grants for %%U>>"%USERDUMP%"
-  "%SQLBIN%\%SQLCLI%" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B ^
-    -e "SHOW GRANTS FOR %%U" >> "%USERDUMP%" 2>>"%LOG%"
-  echo.>>"%USERDUMP%"
-)
-
-echo SET sql_log_bin=1;>> "%USERDUMP%"
-echo.
-echo === Users and grants saved to: "%USERDUMP%"
-
-if exist "%LOG%" (
-  echo Some errors were recorded in: %LOG%
-)
+REM Run PowerShell script (export-users-and-grants.ps1 in same folder)
+powershell -ExecutionPolicy Bypass -File "%~dp0export-users-and-grants.ps1" ^
+  -SqlBin "%SQLBIN%" ^
+  -SqlCli "%SQLCLI%" ^
+  -Host "%HOST%" ^
+  -Port %PORT% ^
+  -User "%USER%" ^
+  -Password "%PASS%" ^
+  -OutDir "%OUTDIR%"
 
 :end
-endlocal
