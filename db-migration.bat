@@ -85,10 +85,12 @@ setlocal EnableExtensions EnableDelayedExpansion
 REM Check executables. Ensure tools exist.
 if not exist "%SQLBIN%\%SQLCLI%" (
   echo ERROR: %SQLCLI% not found at "%SQLBIN%".
+  echo Please open the '%~nx0', and edit the configuration, particularly the path in SQLBIN variable.
   goto :end
 )
 if not exist "%SQLBIN%\%SQLDUMP%" (
   echo ERROR: %SQLDUMP% not found at "%SQLBIN%".
+  echo Please open the '%~nx0', and edit the configuration, particularly the SQLDUMP variable.
   goto :end
 )
 

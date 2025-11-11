@@ -70,6 +70,7 @@ REM ----------------------------------------------------------------
 
 if not exist "%SQLBIN%\%SQLCLI%" (
   echo ERROR: %SQLCLI% not found at "%SQLBIN%".
+  echo Please open the '%~nx0', and edit the configuration, particularly the path in SQLBIN variable.
   goto :end
 )
 
