@@ -20,13 +20,23 @@ set "USER=root"
 REM Password: put real password here, or leave EMPTY to be prompted. Do not expose your password in public!!
 set "PASS="
 
-REM Dump options common for all databases
-REM --skip-extended-insert: one-row-per-INSERT (easier to debug, avoids huge packets)
-set "COMMON_OPTS=--single-transaction --routines --events --triggers --hex-blob --default-character-set=utf8mb4 --skip-extended-insert --add-drop-database --force"
-
 REM If you want to automatically export users/grants, set this to 1 and ensure the second .bat exists. Included in the beginning of FULL dump.
 set "EXPORT_USERS_AND_GRANTS=1"
-REM ============================================
+
+REM Extended INSERTs:
+REM   0 = OFF  -> add --skip-extended-insert (INSERT one record)
+REM   1 = ON   -> use default dump behavior (multiple INSERT's in single block)
+set "USE_EXTENDED_INSERT=1"
+
+REM Dump options common for all databases
+REM --force = continue dump even in case of errors. Dump will be prepared even if some databases/tables are crashed. (W/o crashed tables)
+set "COMMON_OPTS=--single-transaction --routines --events --triggers --hex-blob --default-character-set=utf8mb4 --add-drop-database --force"
+if "%USE_EXTENDED_INSERT%"=="0" (
+  REM --skip-extended-insert: one-row-per-INSERT (easier to debug, avoids huge packets)
+  set "COMMON_OPTS=%COMMON_OPTS% --skip-extended-insert"
+)
+REM ================== END CONFIG ==============
+
 REM Filename used if we dump ALL databases
 set "OUTFILE=%OUTDIR%\_all_databases.sql"
 set "ALLDATA=%OUTDIR%\_all_databases_data.sql"
