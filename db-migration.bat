@@ -174,12 +174,11 @@ REM ================== AFTER DUMPS ==================
 :after_dumps
 echo.
 echo === Database dumps are in: %OUTDIR%
+echo.
 
 if exist "%LOG%" (
-  echo.
   echo Some errors were recorded in: %LOG%
 ) else (
-  echo.
   echo No errors recorded.
 )
 
