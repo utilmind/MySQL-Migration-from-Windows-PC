@@ -82,6 +82,24 @@ def find_conditional_end(comment: str) -> Tuple[Optional[int], Optional[int]]:
     return end_pos, digits_end
 
 
+def report_progress(processed_bytes: int, total_size: int, last: float) -> float:
+    """
+    Print progress to stderr on a single line using carriage return.
+    Returns the updated 'last' value.
+    """
+    if total_size <= 0:
+        percent = 100.0
+    else:
+        percent = (processed_bytes / total_size) * 100
+
+    if percent - last >= 1.0 or percent == 100.0:
+        sys.stderr.write(f"\r{percent:5.1f}%...")
+        sys.stderr.flush()
+        return percent
+
+    return last
+
+
 def process_dump_stream(
     in_path: str,
     out_path: str,
@@ -102,6 +120,8 @@ def process_dump_stream(
     processed_bytes = 0
     last_percent_reported = -1.0
 
+    sys.stderr.write(f"Processing {in_path} ({total_size:,} bytes)\n"),
+
     with open(in_path, "r", encoding="utf-8", errors="replace") as fin, \
          open(out_path, "w", encoding="utf-8", errors="replace") as fout:
 
@@ -111,9 +131,10 @@ def process_dump_stream(
                 break  # EOF
 
             processed_bytes += len(line.encode("utf-8", errors="replace"))
+            last_percent_reported = report_progress(processed_bytes, total_size, last_percent_reported)
+
             # We may modify 'line' as we consume versioned comments
             pos = 0
-
             while True:
                 idx = line.find("/*!", pos)
                 if idx == -1:
@@ -146,16 +167,15 @@ def process_dump_stream(
                         # EOF inside comment - just output what we have and exit
                         fout.write(line[pos:idx])
                         fout.write(comment)
+                        # ensure final progress
+                        last_percent_reported = report_progress(total_size, total_size, last_percent_reported)
+                        sys.stderr.write(" done.\n")
+                        sys.stderr.flush()
                         return
 
                     processed_bytes += len(next_line.encode("utf-8", errors="replace"))
+                    last_percent_reported = report_progress(processed_bytes, total_size, last_percent_reported)
                     comment += next_line
-
-                    # Progress update here as well
-                    percent = (processed_bytes / total_size) * 100 if total_size > 0 else 100.0
-                    if percent - last_percent_reported >= 1.0:
-                        last_percent_reported = percent
-                        print(f"{percent:5.1f}%...", file=sys.stderr, flush=True)
 
                 # At this point we have a full '/*!<digits> ... */' in 'comment'
                 version_str = comment[3:digits_end]
@@ -182,14 +202,10 @@ def process_dump_stream(
                 line = tail
                 pos = 0
 
-            # Progress update after each (original) line
-            percent = (processed_bytes / total_size) * 100 if total_size > 0 else 100.0
-            if percent - last_percent_reported >= 1.0:
-                last_percent_reported = percent
-                print(f"{percent:5.1f}%...", file=sys.stderr, flush=True)
-
-    # Final 100% report
-    print("100.0%... done.", file=sys.stderr, flush=True)
+    # Final 100% report and newline
+    last_percent_reported = report_progress(total_size, total_size, last_percent_reported)
+    sys.stderr.write(" done.\n")
+    sys.stderr.flush()
 
 
 def main() -> None:
