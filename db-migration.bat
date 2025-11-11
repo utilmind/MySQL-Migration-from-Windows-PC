@@ -127,7 +127,7 @@ if errorlevel 1 (
 
 REM Combine _users_and_grants.sql + _all_databases_data.sql into _all_databases.sql
 if exist "%USERDUMP%" (
-  echo Merging "%USERDUMP%" and "%ALLDATA%" into "%OUTFILE%"...
+  echo Combining "%USERDUMP%" and "%ALLDATA%" into "%OUTFILE%"... (* Users should be imported before the data.)
   (
     type "%USERDUMP%"
     echo.
