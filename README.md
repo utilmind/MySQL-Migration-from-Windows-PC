@@ -32,5 +32,5 @@ So if you need to migrate very old data, replace it to just `CREATE USER` and re
 * If you find more incompatibilities, please open discussion in the [Issues](../../issues) or pull your fix to this repo, feel free to edit this `README` as well.
 
 # ToDo
-* When we dump selected databases, let's dump users/grants only for selected databases.
-* Maybe when I get inspired (or someone pays me), I’ll make a tool that converts the MySQL syntax into SQLs compatible with Postgres, Oracle, etc. A simple tool for migrations between MySQL/MariaDB and PostgresSQL. I’m actually sure that something for migration between MySQL to PostgresSQL are already available, but still interested to build my own tool one day.
+* When we dump selected databases, let's dump users/grants only for *selected* databases. 
+* Maybe when I get inspired (or someone pays me :), I’ll make a tool that converts the MySQL syntax into SQLs compatible with Postgres, Oracle, etc. A simple tool for migrations between MySQL/MariaDB and PostgresSQL. I’m actually sure that something for migration between MySQL to PostgresSQL are already available, but still interested to build my own tool one day.
