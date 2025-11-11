@@ -13,6 +13,8 @@ This also great for quick dump and deployment an empty database structure with a
   ✔ Can strip MySQL compatibility comments, which break developers comments `/* ... */` inside of the db triggers. (So all dev's comments in code preserved for import into another db server.) * *this is the most important feature for the author :)*
 
 # Usage
+Before using it __please open `db-migration.bat` with text/code editor__ and set up the path to MySQL/MariaDB executables (and maybe some other options, see the CONFIG part inside).
+
 * `db-migration.bat`                   -> dump all databases separately (+ mysql.sql)
 * `db-migration.bat --ONE`             -> dump all databases into ONE filem _databases.sql (just add `one`, case insensitive)<br />
 &nbsp;&nbsp; &nbsp;&nbsp; <i>* EXCEPT system tables: `mysql`, `information_schema`, `performance_schema`, `sys`.</i>
