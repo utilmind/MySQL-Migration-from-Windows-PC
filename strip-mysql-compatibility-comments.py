@@ -120,7 +120,7 @@ def process_dump_stream(
     processed_bytes = 0
     last_percent_reported = -1.0
 
-    sys.stderr.write(f"Processing {in_path} ({total_size:,} bytes)\n"),
+    sys.stderr.write(f"Removing MySQL compatibility comments from '{in_path}' ({total_size:,} bytes) and saving clean dump to '{out_path}'...\n"),
 
     with open(in_path, "r", encoding="utf-8", errors="replace") as fin, \
          open(out_path, "w", encoding="utf-8", errors="replace") as fout:

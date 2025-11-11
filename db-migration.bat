@@ -69,6 +69,18 @@ if "%USE_EXTENDED_INSERT%"=="0" (
   REM --skip-extended-insert: one-row-per-INSERT (easier to debug, avoids huge packets)
   set "COMMON_OPTS=%COMMON_OPTS% --skip-extended-insert"
 )
+
+REM Remove compatibility comments
+REM     * The MySQL Dump put compatibility comments for earlier versions. E.g `CREATE TRIGGER` is not supported by ancient MySQL versions.
+REM       And the MySQL Dump wraps those instructons in to magic comments, like /*!50003 CREATE*/ /*!50017 DEFINER=`user`@`host`*/ /*!50003 TRIGGER ... END */,
+REM       making issues with regular multiline comments /* ... */ within the triggers.
+REM       We can remove those compatibility comments targeted for some legacy versions (e.g. all MySQL versions lower than 8.0), to keep the important developers comments in the code.
+REM   0 = OFF  -> keep all dumps 'as-is', as they originally exported.
+REM   1 = ON   -> produce processed dumps clean of the compatibility comments. Python should be installed in order to process comments!
+set "REMOVE_COMPATIBILITY_COMMENTS=1"
+REM The file name appendix for dumps clean of the compatibility comments. E.g. mydata.sql -> mydata_clean.sql
+set "COMPATIBILITY_COMMENTS_APPENDIX=_clean"
+set "COMPATIBILITY_COMMENTS_REMOVER=python strip-mysql-compatibility-comments.py"
 REM ================== END CONFIG ==============
 
 REM Filename used if we dump ALL databases
@@ -187,6 +199,10 @@ for %%D in (!DBNAMES!) do (
     echo     ^- See "%LOG%" for details.
   ) else (
     echo     OK
+
+    if "%REMOVE_COMPATIBILITY_COMMENTS%"=="1" (
+      %COMPATIBILITY_COMMENTS_REMOVER% "%OUTDIR%\!DB!.sql" "%OUTDIR%\!DB!%COMPATIBILITY_COMMENTS_APPENDIX%.sql"
+    )
   )
 )
 
@@ -205,17 +221,24 @@ if errorlevel 1 (
   echo     ^- See "%LOG%" for details.
 ) else (
   echo     OK
-)
 
-REM Combine _users_and_grants.sql + _db_data.sql into _db.sql
-if exist "%USERDUMP%" (
-  echo Combining "%USERDUMP%" and "%ALLDATA%" into "%OUTFILE%"... ^(Put users and grants before the data.^)
-  (
-    type "%USERDUMP%"
-    echo.
-    type "%ALLDATA%"
-  ) > "%OUTFILE%"
-  echo     OK, created "%OUTFILE%"
+  if "%REMOVE_COMPATIBILITY_COMMENTS%"=="1" (
+    %COMPATIBILITY_COMMENTS_REMOVER% "%OUTDIR%\!DB!.sql" "%OUTDIR%\!DB!%COMPATIBILITY_COMMENTS_APPENDIX%.sql"
+  )
+
+  REM Combine _users_and_grants.sql + _db_data.sql into _db.sql
+  REM (This is long process if the full dump is large. So if you don't want it, just disable %EXPORT_USERS_AND_GRANTS%, set EXPORT_USERS_AND_GRANTS=0.)
+  if "%EXPORT_USERS_AND_GRANTS%"=="1" (
+    if exist "%USERDUMP%" (
+      echo Combining "%USERDUMP%" and "%ALLDATA%" into "%OUTFILE%"... ^(Put users and grants before the data.^)
+      (
+        type "%USERDUMP%"
+        echo.
+        type "%ALLDATA%"
+      ) > "%OUTFILE%"
+      echo     OK, created "%OUTFILE%"
+    )
+  )
 )
 
 goto :after_dumps
