@@ -72,8 +72,8 @@ if "%USE_EXTENDED_INSERT%"=="0" (
 REM ================== END CONFIG ==============
 
 REM Filename used if we dump ALL databases
-set "OUTFILE=%OUTDIR%\_databases.sql"
-set "ALLDATA=%OUTDIR%\_databases_data.sql"
+set "OUTFILE=%OUTDIR%\_db.sql"
+set "ALLDATA=%OUTDIR%\_db_data.sql"
 set "USERDUMP=%OUTDIR%\_users_and_grants.sql"
 REM Temporary file for the list of databases
 set "DBLIST=%OUTDIR%\^db-list.txt"
@@ -124,7 +124,7 @@ goto :parse_args
 
 
 REM Optionally export users and grants via the separate script.
-REM Important to prepare it in the beginning, to include to the _all_databases export.
+REM Important to prepare it in the beginning, to include to the _all_databases_ export.
 if "%EXPORT_USERS_AND_GRANTS%"=="1" (
   REM === Exporting users and grants using export-users-and-grants.bat ===
   @call "%~dp0export-users-and-grants.bat" "%SQLBIN%" "%HOST%" "%PORT%" "%USER%" "%PASS%" "%OUTDIR%" "%USERDUMP%"
@@ -205,7 +205,7 @@ if errorlevel 1 (
   echo     OK
 )
 
-REM Combine _users_and_grants.sql + _all_databases_data.sql into _all_databases.sql
+REM Combine _users_and_grants.sql + _db_data.sql into _db.sql
 if exist "%USERDUMP%" (
   echo Combining "%USERDUMP%" and "%ALLDATA%" into "%OUTFILE%"... (* Users should be imported before the data.)
   (
