@@ -6,6 +6,12 @@ You make dump on Windows PC, which can be imported into any other MySQL or Maria
 
 This also great for quick dump and deployment an empty database structure with all initial triggers and their definers.
 
+# Key features
+  ✔ Transfers all users and their grants/privileges (excluding system users, like root, mariadb.sys etc)<br />
+  ✔ Doesn't touch system data tables like myseql, sys, information_schema, performance_schema<br />
+  ✔ Can dump data from separate databases into separate files or  produce all-in-one-dump.sql (with '--one' option).<br />
+  ✔ Can strip MySQL compatibility comments, which break developers comments `/* ... */` inside of the db triggers. (So all dev's comments in code preserved for import into another db server.) * *this is the most important feature for the author :)*
+
 # Usage
 * `db-migration.bat`                   -> dump all databases separately (+ mysql.sql)
 * `db-migration.bat --ONE`             -> dump all databases into ONE filem _databases.sql (just add `one`, case insensitive)<br />
