@@ -9,7 +9,7 @@ This also great for quick dump and deployment an empty database structure with a
 # Key features
   ✔ Transfers all users and their grants/privileges (excluding system users, like *root*, *mariadb.sys* etc).<br />
   ✔ Doesn't touch system data tables like *mysql*, *sys*, *information_schema*, *performance_schema*.<br />
-  ✔ Can dump data from separate databases into separate files or  produce all-in-one-dump.sql (with '--one' option).<br />
+  ✔ Can dump data from separate databases into separate files or  produce all-in-one-dump.sql (with `--one` option).<br />
   ✔ Can strip MySQL compatibility comments, which break developers comments `/* ... */` inside of the db triggers. (So all dev's comments in code preserved for import into another db server.) * *this is the most important feature for the author :)*
 
 # Usage
