@@ -64,7 +64,7 @@ set "USE_EXTENDED_INSERT=1"
 
 REM Dump options common for all databases
 REM --force = continue dump even in case of errors. Dump will be prepared even if some databases/tables are crashed. (W/o crashed tables)
-set "COMMON_OPTS=--single-transaction --routines --events --triggers --hex-blob --default-character-set=utf8mb4 --add-drop-database --force"
+set "COMMON_OPTS=--single-transaction --routines --events --triggers --hex-blob --default-character-set=utf8mb4 --create-options --add-drop-database --force"
 if "%USE_EXTENDED_INSERT%"=="0" (
   REM --skip-extended-insert: one-row-per-INSERT (easier to debug, avoids huge packets)
   set "COMMON_OPTS=%COMMON_OPTS% --skip-extended-insert"
@@ -87,7 +87,7 @@ REM Filename used if we dump ALL databases
 set "OUTFILE=%OUTDIR%\_db.sql"
 set "ALLDATA=%OUTDIR%\_db_data.sql"
 set "USERDUMP=%OUTDIR%\_users_and_grants.sql"
-set "TABLE_SCHEMAS=_tables-meta.tsv"
+set "TABLE_SCHEMAS=%OUTDIR%\_tables-meta.tsv"
 REM Temporary file for the list of databases
 set "DBLIST=%OUTDIR%\^db-list.txt"
 set "DBNAMES="
@@ -144,7 +144,8 @@ if "%EXPORT_USERS_AND_GRANTS%"=="1" (
   REM === Exporting users and grants using export-users-and-grants.bat ===
   @call "%~dp0export-users-and-grants.bat" "%SQLBIN%" "%HOST%" "%PORT%" "%USER%" "%PASS%" "%OUTDIR%" "%USERDUMP%"
   if not exist "%USERDUMP%" (
-    echo WARNING: "%USERDUMP%" not found, will create dump with data only, without users/grants.
+    REM echo WARNING: "%USERDUMP%" not found, will create dump with data only, without users/grants.
+    goto :end
   )
 )
 
@@ -161,7 +162,7 @@ REM AK: Alternatively we could use `SELECT DISTINCT TABLE_SCHEMA FROM informatio
 REM     this way could exclude system tables immediately, but this doesn't exports *empty* databases (w/o tables yet), which still could be important. So let's keep canonical SHOW DATABASES, then filter it.
 if errorlevel 1 (
   echo ERROR: Could not retrieve database list.
-  goto :after_dumps
+  goto :end
 )
 
 REM Build a list of non-system database names
