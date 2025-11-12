@@ -92,7 +92,7 @@ set "USERDUMP=%OUTDIR%\_users_and_grants.sql"
 set "TABLE_SCHEMAS=%OUTDIR%\_tables-meta.tsv"
 set "LOG=%OUTDIR%\_errors-dump.log"
 REM Temporary file for the list of databases
-set "DBLIST=%OUTDIR%\^db-list.txt"
+set "DBLIST=%OUTDIR%\__db-list.txt"
 set "DBNAMES="
 
 REM Use UTF-8 encoding for output, if needed

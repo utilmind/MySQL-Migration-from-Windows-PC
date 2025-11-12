@@ -52,9 +52,9 @@ REM =====================================================================
 REM (Don't use exclamation sign in file names, to avoid !VAR! issues.)
 set "USERDUMP=%OUTDIR%\_users_and_grants.sql"
 REM Log and temporary files
-set "LOG=%OUTDIR%\^users_errors.log"
-set "USERLIST=%OUTDIR%\^user-list.txt"
-set "TMPGRANTS=%OUTDIR%\^grants_tmp.txt"
+set "LOG=%OUTDIR%\_users_errors.log"
+set "USERLIST=%OUTDIR%\__user-list.txt"
+set "TMPGRANTS=%OUTDIR%\__grants_tmp.txt"
 
 REM --------- Override config from arguments if provided ----------
 REM Arg1: SQLBIN, Arg2: HOST, Arg3: PORT, Arg4: USER, Arg5: PASS, Arg6: OUTDIR, Arg7: USERDUMP
