@@ -203,7 +203,6 @@ if errorlevel 1 (
 ) else (
     echo Done. Metadata saved to '%TABLE_SCHEMAS%'.
 )
-exit
 
 REM Mode selection: separate OR single SQL dump?
 if "%ONE_MODE%"=="1" goto :all_in_one
