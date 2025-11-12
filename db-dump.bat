@@ -18,7 +18,7 @@ REM      - Supports optional flags to control dump modes
 REM        (e.g. single-file vs per-database).
 REM      - Uses configurable client and dump executables
 REM        (mysql.exe / mysqldump.exe or mariadb.exe / mariadb-dump.exe).
-REM      - Integrates with export-users-and-grants.bat to include
+REM      - Integrates with dump-users-and-grants.bat to include
 REM        users and privileges in the migration.
 REM
 REM  Usage (examples):
@@ -143,8 +143,8 @@ goto :parse_args
 REM Optionally export users and grants via the separate script.
 REM Important to prepare it in the beginning, to include to the _all_databases_ export.
 if "%EXPORT_USERS_AND_GRANTS%"=="1" (
-  REM === Exporting users and grants using export-users-and-grants.bat ===
-  @call "%~dp0export-users-and-grants.bat" "%SQLBIN%" "%HOST%" "%PORT%" "%USER%" "%PASS%" "%OUTDIR%" "%USERDUMP%"
+  REM === Exporting users and grants using dump-users-and-grants.bat ===
+  @call "%~dp0dump-users-and-grants.bat" "%SQLBIN%" "%HOST%" "%PORT%" "%USER%" "%PASS%" "%OUTDIR%" "%USERDUMP%"
   if not exist "%USERDUMP%" (
     REM echo WARNING: "%USERDUMP%" not found, will create dump with data only, without users/grants.
     goto :end

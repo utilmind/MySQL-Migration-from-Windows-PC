@@ -6,4 +6,6 @@
 *.dll
 *.txt
 *.log
-/ps-version
+/ps1
+/bash
+_*
