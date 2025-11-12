@@ -34,8 +34,8 @@ REM
 REM =================================================================================================
 
 REM ================== CONFIG ==================
-REM Path to bin folder containing mysql/mysqldump or mariadb/mariadb-dump
-set "SQLBIN=C:\Program Files\MariaDB 10.5\bin"
+REM Path to bin folder containing mysql/mysqldump or mariadb/mariadb-dump. (Optionally. Something like "SQLBIN=C:\Program Files\MariaDB 10.5\bin".)
+set "SQLBIN="
 REM set "SQLCLI=mariadb.exe"
 set "SQLCLI=mysql.exe"
 REM set "SQLDUMP=mariadb-dump.exe"
@@ -99,13 +99,20 @@ REM Use UTF-8 encoding for output, if needed
 chcp 65001 >nul
 setlocal EnableExtensions EnableDelayedExpansion
 
+REM Add trailing slash (\) to the end of %SQLBIN%, if it's not empty.
+if defined SQLBIN (
+    if not "%SQLBIN:~-1%"=="\" (
+        set "SQLBIN=%SQLBIN%\"
+    )
+)
+
 REM Check executables. Ensure tools exist.
-if not exist "%SQLBIN%\%SQLCLI%" (
+if not exist "%SQLBIN%%SQLCLI%" (
   echo ERROR: %SQLCLI% not found at "%SQLBIN%".
   echo Please open the '%~nx0', and edit the configuration, particularly the path in SQLBIN variable.
   goto :end
 )
-if not exist "%SQLBIN%\%SQLDUMP%" (
+if not exist "%SQLBIN%%SQLDUMP%" (
   echo ERROR: %SQLDUMP% not found at "%SQLBIN%".
   echo Please open the '%~nx0', and edit the configuration, particularly the SQLDUMP variable.
   goto :end
@@ -124,21 +131,20 @@ if not exist "%OUTDIR%" mkdir "%OUTDIR%"
 REM === PARSE CLI ARGUMENTS ===
 :parse_args
 if "%~1"=="" goto :after_args
+    REM --ONE in any position, case insensitive
+    if /I "%~1"=="--ONE" (
+      set "ONE_MODE=1"
+    ) else (
+      REM All others are db names
+      if defined DBNAMES (
+        set "DBNAMES=%DBNAMES% %~1"
+      ) else (
+        set "DBNAMES=%~1"
+      )
+    )
 
-REM --ONE in any position, case insensitive
-if /I "%~1"=="--ONE" (
-  set "ONE_MODE=1"
-) else (
-  REM All others are db names
-  if defined DBNAMES (
-    set "DBNAMES=%DBNAMES% %~1"
-  ) else (
-    set "DBNAMES=%~1"
-  )
-)
-
-shift
-goto :parse_args
+    shift
+    goto :parse_args
 :after_args
 
 
@@ -160,7 +166,7 @@ REM If we already have the list of databases to dump, then don't retrieve names 
 if "%DBNAMES%" NEQ "" goto :mode_selection
 
 echo === Getting database list from %HOST%:%PORT% ...
-"%SQLBIN%\%SQLCLI%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% -N -B -e "SHOW DATABASES" > "%DBLIST%"
+"%SQLBIN%%SQLCLI%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% -N -B -e "SHOW DATABASES" > "%DBLIST%"
 REM AK: Alternatively we could use `SELECT DISTINCT TABLE_SCHEMA FROM information_schema.TABLES WHERE TABLE_SCHEMA NOT IN ("information_schema", "performance_schema", "mysql", "sys");`,
 REM     this way could exclude system tables immediately, but this doesn't exports *empty* databases (w/o tables yet), which still could be important. So let's keep canonical SHOW DATABASES, then filter it.
 if errorlevel 1 (
@@ -200,7 +206,7 @@ for %%D in (!DBNAMES!) do (
 
 REM === Dump default table schemas, to be able to restore everything exactly as on original server ===
 echo Dumping table metadata to '%TABLE_SCHEMAS%' ...
-"%SQLBIN%\%SQLCLI%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% -N -B -e "SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE, ROW_FORMAT, TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA IN (!DBNAMES_IN!) ORDER BY TABLE_SCHEMA, TABLE_NAME;" > "%TABLE_SCHEMAS%"
+"%SQLBIN%%SQLCLI%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% -N -B -e "SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE, ROW_FORMAT, TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA IN (!DBNAMES_IN!) ORDER BY TABLE_SCHEMA, TABLE_NAME;" > "%TABLE_SCHEMAS%"
 if errorlevel 1 (
     echo Failed to dump table metadata.
 ) else (
@@ -216,7 +222,7 @@ for %%D in (!DBNAMES!) do (
   set "OUTFILE=%OUTDIR%\!DB!.sql"
   echo.
   echo --- Dumping database: !DB!  ^> "!OUTFILE!"
-  "%SQLBIN%\%SQLDUMP%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% --databases "!DB!" %COMMON_OPTS% --result-file="!OUTFILE!"
+  "%SQLBIN%%SQLDUMP%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% --databases "!DB!" %COMMON_OPTS% --result-file="!OUTFILE!"
   if errorlevel 1 (
     echo [%DATE% %TIME%] ERROR dumping !DB! >> "%LOG%"
     echo     ^- See "%LOG%" for details.
@@ -247,7 +253,7 @@ if "%REMOVE_COMPATIBILITY_COMMENTS%"=="1" (
 )
 
 echo Output: "%ALLDATA%"
-"%SQLBIN%\%SQLDUMP%" -h %HOST% -P %PORT% -u %USER% -p%PASS% --databases !DBNAMES! %COMMON_OPTS% --result-file="%ALLDATA%"
+"%SQLBIN%%SQLDUMP%" -h %HOST% -P %PORT% -u %USER% -p%PASS% --databases !DBNAMES! %COMMON_OPTS% --result-file="%ALLDATA%"
 
 if errorlevel 1 (
   echo [%DATE% %TIME%] ERROR dumping ALL NON-SYSTEM DATABASES >> "%LOG%"

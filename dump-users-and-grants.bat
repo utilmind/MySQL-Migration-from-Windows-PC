@@ -35,8 +35,8 @@ REM
 REM ======================================================================
 
 REM ============ DEFAULT CONFIG (used if no args are passed) ============
-REM Path to bin folder (MariaDB or MySQL)
-set "SQLBIN=C:\Program Files\MariaDB 10.5\bin"
+REM Path to bin folder (MariaDB or MySQL). (Optionally. Something like "SQLBIN=C:\Program Files\MariaDB 10.5\bin".)
+set "SQLBIN="
 REM Client executable name: mysql.exe or mariadb.exe / mysqldump.exe or mariadb-dump.exe.
 set "SQLCLI=mysql.exe"
 set "SQLDUMP=mysqldump.exe"
@@ -68,7 +68,14 @@ if not "%~6"=="" set "OUTDIR=%~6"
 if not "%~7"=="" set "USERDUMP=%~7"
 REM ----------------------------------------------------------------
 
-if not exist "%SQLBIN%\%SQLCLI%" (
+REM Add trailing slash (\) to the end of %SQLBIN%, if it's not empty.
+if defined SQLBIN (
+    if not "%SQLBIN:~-1%"=="\" (
+        set "SQLBIN=%SQLBIN%\"
+    )
+)
+
+if not exist "%SQLBIN%%SQLCLI%" (
   echo ERROR: %SQLCLI% not found at "%SQLBIN%".
   echo Please open the '%~nx0', and edit the configuration, particularly the path in SQLBIN variable.
   goto :end
@@ -98,7 +105,7 @@ chcp 65001 >nul
 echo === Exporting users and grants to "%USERDUMP%" ===
 
 REM Get list of users@hosts; skip system accounts like root, mariadb.sys, mysql.sys, mysql.session
-"%SQLBIN%\%SQLCLI%" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B ^
+"%SQLBIN%%SQLCLI%" -h %HOST% -P %PORT% -u %USER% -p%PASS% -N -B ^
   -e "SELECT CONCAT('''',User,'''@''',Host,'''') FROM mysql.user WHERE User<>'' AND User NOT IN ('root','mariadb.sys','mysql.sys','mysql.session')" > "%USERLIST%"
 
 if errorlevel 1 (
@@ -116,7 +123,7 @@ for /f "usebackq delims=" %%U in ("%USERLIST%") do (
   echo CREATE USER IF NOT EXISTS %%U;>>"%USERDUMP%"
 
   REM Write SHOW GRANTS output to a temporary file. (AK: we could output them, but should add ';' after GRANT string...)
-  "%SQLBIN%\%SQLCLI%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% -N -B -e "SHOW GRANTS FOR %%U" >"%TMPGRANTS%" 2>>"%LOG%"
+  "%SQLBIN%%SQLCLI%" -h "%HOST%" -P %PORT% -u "%USER%" -p%PASS% -N -B -e "SHOW GRANTS FOR %%U" >"%TMPGRANTS%" 2>>"%LOG%"
 
   REM Read each GRANT line and append a semicolon
   for /f "usebackq delims=" %%G in ("%TMPGRANTS%") do (

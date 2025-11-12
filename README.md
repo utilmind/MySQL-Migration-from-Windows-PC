@@ -21,13 +21,15 @@ This tool is also perfect for quickly deploying an empty database structure with
 
 ## ⚙️ Usage
 
-Before using, **open `db-migration.bat` in a text/code editor** and configure the path to your MySQL/MariaDB executables (and optionally other parameters — see the CONFIG section inside).
+Before using, **open `db-migration.bat` in a text/code editor** and review the configuration (in CONFIG section inside).
 
 * `db-migration.bat` — dumps all databases separately (+ `mysql.sql`)
 * `db-migration.bat --ONE` — dumps all databases into a single file `_databases.sql` (case-insensitive).
   * *Excludes system databases:* `mysql`, `information_schema`, `performance_schema`, `sys`.
 * `db-migration.bat db1 db2 db3` — dumps only the listed databases (separately).
 * `db-migration.bat --ONE db1 db2 db3` — dumps only the listed databases into a single `_databases.sql`.
+
+💡 You can also dump remote hosts, specifying the hostname/IP and in the `%HOST%`/`%PORT%` variables.
 
 ---
 
