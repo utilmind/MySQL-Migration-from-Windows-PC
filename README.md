@@ -40,6 +40,14 @@ The `strip-mysql-compatibility-comments.py` removes (unwraps) old versioned comp
 So if you need to migrate very old data, replace it to just `CREATE USER` and remove `IF NOT EXISTS`.
 * If you find more incompatibilities, please open discussion in the [Issues](../../issues) or pull your fix to this repo, feel free to edit this `README` as well.
 
+# What you should remember upon migration of MySQL databases in general (with these tools or not)
+  1. Никогда не трогать данные системных таблиц *(information_schema, performance_schema, mysql, sys)* и системных юзеров *(root, mariadb.sys etc)*. Если что-то было нарушено в системных данных — лучше переустановить всю базу с нуля.
+  2. Не копируй базу данных банарными файлами. С MyISAM таблицами это может прокатить, а с InnoDB и другими — нет.
+  3. (Очень важно и зачастую неочевидно!) Помни, что дефолтные таблицы символов и их коллации могут отличаться от сервера к серверу. Особенно часто они отличаются при апгрейдах сервера баз данных или переключении с одной версии MySQL/MariaDB на другую. Стандартный `mysqldump` пропускает опции для создания таблиц, если они совпадают с дефолтными опциями всего сервера. Поэтому при переносе данных очень важно, чтобы инструкции `CREATE TABLE` были полными, чтобы данные таблиц восстанавливались в оригинальной символьной таблице с оригинальной коллацией, а не дефолтной для сервера. Пример проблемы: вы импортируете таблицу с уникальным значением какого-то поля. В коллации `utf8mb4_general_ci` символы г и ґ считаются разными, в то время как коллация `utf8mb4_uca1400_ai_ci` не делает между ними разницы для поиска. Поэтому при попытке вставки в уникальное поле украинское слово «грати» (укр. играть) вы не сможете вставить слово «ґрати» (ворота). Или ещё пример, в некоторых коллациях слово naïve считается равнозначным naive, а вне которых — нет.
+      Этот скрипт решает проблему ралличных коллаций при миграции, дополняя `CREATE TABLE` statements дампа необходимыми инструкциями для полного восстановления таблиц в оригинальной форме.
+  5. (Просто совет) Ошибки при импорте баз данных могут остаться незамеченными, быстро промелькнув на экране терминала. Обязательно ловите ошибки импорта выводя их *error.log*. например, так:
+      `mysql -u root -p < _db-dump.sql > errors.log`
+
 # ToDo
 * When we dump selected databases, let's dump users/grants only for *selected* databases.
 * Maybe when I get inspired (or someone pays me :), I’ll make a tool that converts the MySQL syntax into SQLs compatible with Postgres, Oracle, etc. A simple tool for migrations between MySQL/MariaDB and PostgresSQL. I’m actually sure that something for migration between MySQL to PostgresSQL are already available, but still interested to build my own tool one day.
