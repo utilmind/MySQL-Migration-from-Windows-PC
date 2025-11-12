@@ -70,13 +70,15 @@ if "%USE_EXTENDED_INSERT%"=="0" (
   set "COMMON_OPTS=%COMMON_OPTS% --skip-extended-insert"
 )
 
-REM Remove compatibility comments
+REM Remove compatibility comments + add missing options to the `CREATE TABLE` statements.
 REM     * The MySQL Dump put compatibility comments for earlier versions. E.g `CREATE TRIGGER` is not supported by ancient MySQL versions.
 REM       And the MySQL Dump wraps those instructons in to magic comments, like /*!50003 CREATE*/ /*!50017 DEFINER=`user`@`host`*/ /*!50003 TRIGGER ... END */,
 REM       making issues with regular multiline comments /* ... */ within the triggers.
 REM       We can remove those compatibility comments targeted for some legacy versions (e.g. all MySQL versions lower than 8.0), to keep the important developers comments in the code.
+REM     * This tool also solves issues with importing tables to the servers with different default collations, by supplying `CREATE TABLE` statements with missing instructions.
 REM   0 = OFF  -> keep all dumps 'as-is', as they originally exported.
-REM   1 = ON   -> produce processed dumps clean of the compatibility comments. Python should be installed in order to process comments!
+REM   1 = ON   -> produce processed dumps clean of the compatibility comments and with complete CREATE TABLE instructions.
+REM               * Python should be installed if this feature is used!
 set "REMOVE_COMPATIBILITY_COMMENTS=1"
 REM The file name appendix for dumps clean of the compatibility comments. E.g. mydata.sql -> mydata.clean.sql
 set "COMPATIBILITY_COMMENTS_APPENDIX=.clean"
