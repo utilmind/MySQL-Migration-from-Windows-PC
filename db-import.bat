@@ -36,7 +36,7 @@ REM   --verbose         -> show what is being executed (some progress). It puts 
 REM   --force           -> continue import even if SQL errors occur. You can review all errors together in the log.
 REM   < "%FILE%"        -> read SQL commands from dump file
 REM   2> "%LOGFILE%"    -> send ONLY errors (stderr) to _errors.log
-mysql -u root -p --verbose --force -e "source \"%FILE%\"" 2> "%LOGFILE%"
+mysql -u root -p --verbose --force -e "source %FILE%" 2> "%LOGFILE%"
 
 REM Save MySQL process exit code (connection / fatal errors)
 set "MYSQL_ERRORLEVEL=%ERRORLEVEL%"
