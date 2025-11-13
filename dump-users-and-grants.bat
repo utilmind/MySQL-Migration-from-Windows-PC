@@ -38,6 +38,7 @@ REM ============ DEFAULT CONFIG (used if no args are passed) ============
 REM Path to bin folder (MariaDB or MySQL). (Optionally. Something like "SQLBIN=C:\Program Files\MariaDB 10.5\bin".)
 REM ATTN! If you have MULTIPLE VERSIONS of MySQL/MariaDB installed on your computer, please specify the exact path to the working version you are dumping from!
 set "SQLBIN="
+REM Run "mysql --version" to figure out the version of your default mysql.exe
 REM Client executable name: mysql.exe or mariadb.exe / mysqldump.exe or mariadb-dump.exe.
 set "SQLCLI=mysql.exe"
 set "SQLDUMP=mysqldump.exe"
