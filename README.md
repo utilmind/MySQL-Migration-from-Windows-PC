@@ -73,7 +73,7 @@ The result: a clean, readable, and portable dump that imports without issues on 
    Default character sets often differ between MySQL/MariaDB versions or server configurations.
    The standard `mysqldump` skips charset/collation options if they match the server defaults — which can lead to corrupted data or collation mismatches after import.
 
-   Example:
+   Example:<br />
    A field defined as `UNIQUE` may reject an insert if the new server’s collation treats certain characters as equivalent.
    For instance, in `utf8mb4_general_ci`, Ukrainian letters **г** and **ґ** are distinct, but in `utf8mb4_uca1400_ai_ci` they are treated as equal.
    So inserting differnt words like Ukrainian “ґрати” (“gate”) after “грати” (“to play”) would trigger a duplicate-key error.
