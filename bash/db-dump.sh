@@ -1,12 +1,76 @@
 #!/bin/bash
 set -euo pipefail
 
+
 # CONFIGURATION
 # Specify as bash array, even if only 1 prefix is used. Strings are not accepted. Only array is ok.
 dbTablePrefix=('silk_' 'silkx_' '3dproofer_' 'bot_' 'email_')
 
 
-# ================================  !! INSTALLATION !!  ================================
+# ---------------- BUILD DUMP OPTIONS (COMMON_OPTS) ----------------
+
+# Dump options common for all databases
+# NOTE: These options affect every dump produced by this script.
+#       Keep them conservative for maximum compatibility.
+COMMON_OPTS=(
+    --routines
+    --events
+    --triggers
+    --single-transaction
+    --quick
+)
+
+# --routines/--events/--triggers: include stored routines, events, and triggers.
+# --single-transaction: take a consistent snapshot without locking tables (InnoDB only).
+# --quick: stream rows row-by-row to reduce memory usage on large tables. (--single-transaction w/o row-by-row streaming can be slow and overload RAM.)
+
+# Continue the dump even if some statements fail. Check the LOG file afterwards.
+COMMON_OPTS+=( --force )
+
+# Use UTF-8 for the client/server connection.
+# NOTE that MySQL does NOT emit explicit COLLATE clauses in `CREATE TABLE` for columns/tables that use
+# the database default collation. Such dumps implicitly depend on the original server defaults. If you
+# import them on a server with different defaults, uniqueness and comparison rules may change.
+# The post-processing step (REMOVE_COMPATIBILITY_COMMENTS=1) restores the original charset and collation
+# into each `CREATE TABLE` to prevent this.
+COMMON_OPTS+=( --default-character-set=utf8mb4 )
+
+# Include standard non-default CREATE TABLE options (e.g., ROW_FORMAT) for portability.
+COMMON_OPTS+=( --create-options )
+
+# Store BLOBs as hex strings. Makes dumps larger but safer/readable in text editors.
+# Comment the next line out if you prefer smaller files.
+COMMON_OPTS+=( --hex-blob )
+
+# Make dumps more portable between servers (managed MySQL, MariaDB, different versions).
+# Avoid embedding tablespace directives in CREATE TABLE.
+COMMON_OPTS+=( --no-tablespaces )
+
+# Do NOT inject SET @@GLOBAL.GTID_PURGED into the dump (safer for imports into existing replicas).
+COMMON_OPTS+=( --set-gtid-purged=OFF )
+
+# ===== Optional, uncomment/remove as needed =====
+
+# If dumping from MySQL 8.x to older MySQL/MariaDB where COLUMN_STATISTICS is absent, enable:
+# COMMON_OPTS+=( --column-statistics=0 )
+
+# Preserve server local time zone behavior (usually NOT recommended). By default, mysqldump sets UTC.
+# Only use if your target server lacks time zone tables or you have a strong reason to avoid UTC.
+# COMMON_OPTS+=( --skip-tz-utc )
+
+# For repeatable imports and better compression, order rows by PRIMARY KEY (if present):
+# COMMON_OPTS+=( --order-by-primary )
+
+# In pure InnoDB environments, you can skip metadata locks on non-transactional tables:
+# COMMON_OPTS+=( --skip-lock-tables )
+
+# Drop and recreate the database before importing a full dump (NOT for partial/table-only imports):
+# COMMON_OPTS+=( --add-drop-database )
+
+# Use one INSERT per row (easier diff/merge; slower/larger). Default is multi-row extended inserts.
+# COMMON_OPTS+=( --skip-extended-insert )
+
+# ========================  !! INSTALLATION INSTRUCTIONS !!  ===========================
 #   - Set up on crontab: crontab -e
 #
 #     Daily crontab, to make daily backups at 5 AM
@@ -108,19 +172,22 @@ fi
 dumpTemplate="$1"
 dbConfigName="${2:-}"   # may be empty
 
-
 # ---------------- BASIC PATHS / FILENAMES ----------------
-# Temporary files, table lists...
-myisamTablesFilename="_$dbConfigName-optimize_tables.txt"
-allTablesFilename="_$dbConfigName-export_tables.txt"
-# TSV with table metadata for Python post-processing.
-# We keep it near the resulting dump file, with predictable name.
-tablesMetaFilename="_$dbConfigName-tables_meta.tsv"
 
 thisScript=$(readlink -f "$0") # alternative is $(realpath "$0"), if "realpath" is installed
 scriptDir=$(dirname "$thisScript")
-myisamTablesFilename="$scriptDir/$myisamTablesFilename"
-allTablesFilename="$scriptDir/$allTablesFilename"
+
+# Temporary directory for helper files (table lists, metadata, etc.)
+tempDir="$scriptDir/_temp"
+# Create $tempDir if not exists
+mkdir -p "$tempDir"
+
+# Temporary files, table lists...
+myisamTablesFilename="$tempDir/_${dbConfigName}-optimize_tables.txt"
+allTablesFilename="$tempDir/_${dbConfigName}-export_tables.txt"
+# TSV with table metadata for Python post-processing.
+# We keep it in the temp directory, with predictable name.
+tablesMetaFilename="$tempDir/_${dbConfigName}-tables_meta.tsv"
 
 current_date=$(date +"%Y%m%d")
 targetFilename=$(echo "$dumpTemplate" | sed "s/@/${current_date}/g")
@@ -165,6 +232,14 @@ if [ -z "${dbPassword:-}" ]; then
     echo
 fi
 
+# Common MySQL connection options (used for mysql, mysqlcheck, mysqldump)
+mysqlConnOpts=(
+    --host="$dbHost"
+    --port="$dbPort"
+    --user="$dbUsername"
+    --password="$dbPassword"
+)
+
 
 # ---------------- BUILD TABLE FILTER (PREFIXES) ----------------
 
@@ -189,7 +264,7 @@ like_clause="($like_clause)"
 #   * keep resulting schema as close to original server as possible.
 
 echo "Dumping table metadata to '$tablesMetaFilename' ..."
-if ! mysql --host="$dbHost" --port="$dbPort" --user="$dbUsername" --password="$dbPassword" -N \
+if ! mysql "${mysqlConnOpts[@]}" -N \
     -e "SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE, ROW_FORMAT, TABLE_COLLATION
         FROM INFORMATION_SCHEMA.TABLES
         WHERE TABLE_SCHEMA = '$dbName'
@@ -204,7 +279,7 @@ fi
 # ---------------- PREPARE TABLE LISTS ----------------
 
 # Get tables. Only BASE TABLEs with non-InnoDB engine can be optimized.
-mysql --host="$dbHost" --port="$dbPort" --user="$dbUsername" --password="$dbPassword" -N "$dbName" \
+mysql "${mysqlConnOpts[@]}" -N "$dbName" \
     -e "SELECT table_name
         FROM INFORMATION_SCHEMA.TABLES
         WHERE table_schema='$dbName'
@@ -215,7 +290,7 @@ mysql --host="$dbHost" --port="$dbPort" --user="$dbUsername" --password="$dbPass
         ORDER BY table_name" > "$myisamTablesFilename"
 
 # Get all kinds of tables: BASE TABLEs and VIEWS for export.
-mysql --host="$dbHost" --port="$dbPort" --user="$dbUsername" --password="$dbPassword" -N "$dbName" \
+mysql "${mysqlConnOpts[@]}" -N "$dbName" \
     -e "SELECT table_name
         FROM INFORMATION_SCHEMA.TABLES
         WHERE table_schema='$dbName'
@@ -230,8 +305,7 @@ mysql --host="$dbHost" --port="$dbPort" --user="$dbUsername" --password="$dbPass
 # NOTE (AK 2025-10-04): we don't need to optimize InnoDB tables. And we mostly have InnoDB.
 if [ -s "$myisamTablesFilename" ]; then
     mysqlcheck --optimize --verbose \
-        --host="$dbHost" --port="$dbPort" \
-        --user="$dbUsername" --password="$dbPassword" \
+        "${mysqlConnOpts[@]}" \
         --databases "$dbName" \
         --tables $(cat "$myisamTablesFilename" | xargs) \
     || echo "WARNING: Failed to optimize tables (probably insufficient privileges). Continuing without optimization." >&2
@@ -239,20 +313,13 @@ else
     echo "No non-InnoDB tables found matching configured prefixes. Skipping optimization step."
 fi
 
-
 # ---------------- DUMP DATABASE ----------------
 
-# Export (ATTN! --skip-tz-utc used to not change time. Remove this option if needed.)
-# Recommended options which could not be present in legacy MySQL versions:
-#   --set-gtid-purged=OFF
-#   --column-statistics=0
-mysqldump "$dbName" \
-    --host="$dbHost" --port="$dbPort" \
-    --user="$dbUsername" --password="$dbPassword" \
-    --set-gtid-purged=OFF \
-    --column-statistics=0 \
-    --skip-tz-utc --no-tablespaces \
-    --triggers --routines --events \
+# Export using COMMON_OPTS built above.
+mysqldump \
+    "${mysqlConnOpts[@]}" \
+    "${COMMON_OPTS[@]}" \
+    "$dbName" \
     $(cat "$allTablesFilename" | xargs) \
     > "$targetFilename"
 
@@ -292,7 +359,6 @@ fi
 if [ -f "$targetFilename.rar" ]; then
     mv "$targetFilename.rar" "$targetFilename.previous.rar"
 fi
-
 
 # compress with gzip (compression level from 1 to 9, from fast to best)
 # Use 9 (best) for automatic, scheduled backups and 5 (normal) for manual backups, when you need db now.
