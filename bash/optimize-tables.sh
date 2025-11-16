@@ -90,7 +90,7 @@ while [[ "${1-}" == -* ]] ; do
             break
             ;;
         *)
-            log_error "ERROR: Invalid parameter: '$1'"
+            log_error "Invalid parameter: '$1'"
             exit 1
             ;;
     esac
@@ -122,7 +122,7 @@ else
 fi
 
 if [ ! -r "$credentialsFile" ]; then
-    log_error "ERROR: Credentials file '$credentialsFile' not found or not readable."
+    log_error "Credentials file '$credentialsFile' not found or not readable."
     echo "Please create it with DB connection settings:"
     echo "  dbHost, dbPort, dbName, dbUsername, [dbPassword], [dbTablePrefix]"
     exit 1
@@ -135,7 +135,7 @@ if [ -z "${dbName:-}" ]; then
     if [ -n "$confName" ]; then
         dbName="$confName"
     else
-        log_error "ERROR: 'dbName' is not defined in credentials file '$credentialsFile' and no configuration-name argument was provided."
+        log_error "'dbName' is not defined in credentials file '$credentialsFile' and no configuration-name argument was provided."
         exit 1
     fi
 fi
@@ -164,7 +164,7 @@ if [ -n "$tablesListRaw" ]; then
     read -r -a explicitTables <<< "$tablesListRaw"
 
     if [ ${#explicitTables[@]} -eq 0 ]; then
-        log_error "ERROR: Explicit table list (second parameter) is empty after parsing."
+        log_error "Explicit table list (second parameter) is empty after parsing."
         exit 1
     fi
 
@@ -183,7 +183,7 @@ if [ -n "$tablesListRaw" ]; then
 else
     # Prefix mode: use dbTablePrefix to select tables.
     if [ -z "${dbTablePrefix+x}" ]; then
-        log_error "ERROR: dbTablePrefix is not defined in configuration and no explicit table list was provided."
+        log_error "dbTablePrefix is not defined in configuration and no explicit table list was provided."
         echo "Either define dbTablePrefix in the credentials file or pass explicit tables as the second parameter."
         exit 1
     fi
@@ -231,7 +231,7 @@ if [ -s "$myisamTablesFilename" ]; then
         "${mysqlConnOpts[@]}" \
         --databases "$dbName" \
         --tables $(cat "$myisamTablesFilename" | xargs) \
-    || log_warn "WARNING: Failed to optimize MyISAM tables (probably insufficient privileges). Continuing without optimization." >&2
+    || log_warn "Failed to optimize MyISAM tables (probably insufficient privileges). Continuing without optimization." >&2
 else
     log_info "No MyISAM tables selected for optimization in '$dbName'."
 fi
@@ -243,7 +243,9 @@ if [ -s "$innoDBTablesFilename" ]; then
         "${mysqlConnOpts[@]}" \
         --databases "$dbName" \
         --tables $(cat "$innoDBTablesFilename" | xargs) \
-    || log_warn "WARNING: Failed to analyze InnoDB tables (probably insufficient privileges). Continuing without analyze." >&2
+    || log_warn "Failed to analyze InnoDB tables (probably insufficient privileges). Continuing without analyze." >&2
 else
     log_info "No InnoDB tables selected for analyze in '$dbName'."
 fi
+
+log_ok "Table maintenance completed for database '$dbName'."
