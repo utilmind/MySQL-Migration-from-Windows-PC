@@ -23,7 +23,7 @@ This tool is also perfect for quickly deploying an empty database structure with
 
 ### 🪟 Windows
 
-Before using, **open `db-dump.bat` in a text/code editor** and review the configuration (in CONFIG section inside).
+**Open `db-dump.bat` in a text/code editor** and review the configuration (in CONFIG section inside).
 
 * `db-dump.bat` — dumps all databases separately (+ `mysql.sql`)
 * `db-dump.bat --ONE` — dumps all databases into a single file `_databases.sql` (case-insensitive).
@@ -35,7 +35,7 @@ Before using, **open `db-dump.bat` in a text/code editor** and review the config
 
 ### 🐧 Linux
 
-**Open `bash/db-dump.sh` in a text/code editor** and review the configuration (in CONFIG section inside).<br />
+**Open `bash/db-dump.sh` in a text/code editor** and review the configuration (in CONFIGURATION section in the top of the script).<br />
 Then copy content of `bash` directory to your server instance.
 
 * `db-dump.sh /path/dump-name.sql configuration-name` — dumps all databases into a single SQL file using connection settings from the configuration file named `.configuration-name.credentials.sh` in the same directory where `db-dump.sh` is located. If configuration-name not specified, all settings will be taken from `.credentials.sh`.
