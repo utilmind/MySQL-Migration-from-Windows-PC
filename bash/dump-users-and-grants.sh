@@ -13,6 +13,10 @@
 #    Features:
 #      - Connects to the server using the configured client binary
 #        (mysql or mariadb).
+#      - Reads connection settings from:
+#          * CLI options,
+#          * .credentials.sh or .<config>.credentials.sh,
+#          * built-in defaults (fallback).
 #      - Queries mysql.user to obtain the list of non-system accounts.
 #      - Skips internal / system users (root, mysql.sys, etc.) by default.
 #      - Optional filter by user name prefix (User LIKE 'prefix%').
@@ -21,6 +25,19 @@
 #          * re-apply all privileges using SHOW GRANTS output.
 #      - Writes everything into _users_and_grants.sql so that it can be
 #        imported before or together with database dumps.
+#
+#  Credentials:
+#    This script can load connection settings from:
+#      - .credentials.sh
+#      - .<config-name>.credentials.sh
+#
+#    Expected variables in credentials file:
+#      dbHost="localhost"
+#      dbPort="3306"
+#      dbUser="silkcards_dump"
+#      dbPass="secret"
+#      # optional:
+#      # dbSqlBin="/usr/bin"   # path to mysql/mariadb client bin dir
 #
 #  Usage:
 #    Modern (recommended) syntax:
@@ -33,6 +50,9 @@
 ###############################################################################
 
 # --------------------------- DEFAULTS ----------------------------------
+# Configuration profile name (maps to .<config>.credentials.sh)
+CONFIG_NAME=""
+
 # Path to bin folder (MariaDB or MySQL).
 SQLBIN=""
 
@@ -42,11 +62,17 @@ SQLCLI="${SQLCLI:-mysql}"
 # Output folder for _users_and_grants.sql
 OUTDIR="./_db-dumps"
 
-# Connection params
+# Connection params (may be overridden by credentials and/or CLI)
 HOST="localhost"
 PORT="3306"
 USER="root"
 PASS=""
+
+# Remember what was set explicitly via CLI / positional args
+HOST_FROM_CLI=0
+PORT_FROM_CLI=0
+USER_FROM_CLI=0
+PASS_FROM_CLI=0
 
 # Output file (can be overridden; if empty, will be set after OUTDIR known)
 USERDUMP=""
@@ -75,6 +101,8 @@ Usage:
   dump-users-and-grants.sh [options]
 
 Options:
+  --config NAME        Use .NAME.credentials.sh instead of .credentials.sh
+                       for connection settings (dbHost, dbPort, dbUser, dbPass).
   --sqlbin PATH        Path to directory with mysql/mariadb client binary.
   --host HOST          Database host (default: ${HOST})
   --port PORT          Database port (default: ${PORT})
@@ -93,6 +121,8 @@ Legacy positional syntax (still supported, but deprecated):
   dump-users-and-grants.sh [SQLBIN] [HOST] [PORT] [USER] [PASSWORD] [OUTDIR] [OUTFILE]
 
 Notes:
+  - Connection precedence:
+      CLI options > .<config>.credentials.sh > built-in defaults.
   - The script generates:
       * SET sql_log_bin=0; at the beginning,
       * CREATE USER IF NOT EXISTS statements,
@@ -125,18 +155,20 @@ log_err()  { printf "%s[FAIL]%s %s\n" "$C_ERR"  "$C_RESET" "$*"; }
 parse_args() {
   local positional=()
 
-  while [[ $# > 0 ]]; do
+  while [[ $# -gt 0 ]]; do
     case "$1" in
+      --config)
+        CONFIG_NAME="$2"; shift 2 ;;
       --sqlbin)
         SQLBIN="$2"; shift 2 ;;
       --host)
-        HOST="$2"; shift 2 ;;
+        HOST="$2"; HOST_FROM_CLI=1; shift 2 ;;
       --port)
-        PORT="$2"; shift 2 ;;
+        PORT="$2"; PORT_FROM_CLI=1; shift 2 ;;
       --user)
-        USER="$2"; shift 2 ;;
+        USER="$2"; USER_FROM_CLI=1; shift 2 ;;
       --password)
-        PASS="$2"; shift 2 ;;
+        PASS="$2"; PASS_FROM_CLI=1; shift 2 ;;
       --outdir)
         OUTDIR="$2"; shift 2 ;;
       --outfile)
@@ -169,25 +201,61 @@ parse_args() {
   # Legacy positional mapping:
   # [0]=SQLBIN [1]=HOST [2]=PORT [3]=USER [4]=PASS [5]=OUTDIR [6]=OUTFILE
   if [[ ${#positional[@]} -gt 0 ]]; then
-    [[ -n "${positional[0]:-}" ]] && SQLBIN="${positional[0]}"
-    [[ -n "${positional[1]:-}" ]] && HOST="${positional[1]}"
-    [[ -n "${positional[2]:-}" ]] && PORT="${positional[2]}"
-    [[ -n "${positional[3]:-}" ]] && USER="${positional[3]}"
-    [[ -n "${positional[4]:-}" ]] && PASS="${positional[4]}"
-    [[ -n "${positional[5]:-}" ]] && OUTDIR="${positional[5]}"
-    [[ -n "${positional[6]:-}" ]] && USERDUMP="${positional[6]}"
+    if [[ -n "${positional[0]:-}" ]]; then SQLBIN="${positional[0]}"; fi
+    if [[ -n "${positional[1]:-}" ]]; then HOST="${positional[1]}"; HOST_FROM_CLI=1; fi
+    if [[ -n "${positional[2]:-}" ]]; then PORT="${positional[2]}"; PORT_FROM_CLI=1; fi
+    if [[ -n "${positional[3]:-}" ]]; then USER="${positional[3]}"; USER_FROM_CLI=1; fi
+    if [[ -n "${positional[4]:-}" ]]; then PASS="${positional[4]}"; PASS_FROM_CLI=1; fi
+    if [[ -n "${positional[5]:-}" ]]; then OUTDIR="${positional[5]}"; fi
+    if [[ -n "${positional[6]:-}" ]]; then USERDUMP="${positional[6]}"; fi
+  fi
+}
+
+# -------------------- CREDENTIALS LOADING ------------------------------
+load_credentials() {
+  # Determine script directory
+  local base_dir cred_file
+  base_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+  if [[ -n "$CONFIG_NAME" ]]; then
+    cred_file="${base_dir}/.${CONFIG_NAME}.credentials.sh"
+  else
+    cred_file="${base_dir}/.credentials.sh"
+  fi
+
+  if [[ -f "$cred_file" ]]; then
+    log_info "Loading credentials from: ${cred_file}"
+    # shellcheck disable=SC1090
+    . "$cred_file"
+  else
+    if [[ -n "$CONFIG_NAME" ]]; then
+      log_warn "Credentials file not found: ${cred_file}"
+    fi
+    return
+  fi
+
+  # Apply credentials → internal HOST/PORT/USER/PASS (if not overridden by CLI)
+  if [[ ${HOST_FROM_CLI:-0} -ne 1 && -n "${dbHost:-}" ]]; then HOST="$dbHost"; fi
+  if [[ ${PORT_FROM_CLI:-0} -ne 1 && -n "${dbPort:-}" ]]; then PORT="$dbPort"; fi
+  if [[ ${USER_FROM_CLI:-0} -ne 1 && -n "${dbUser:-}" ]]; then USER="$dbUser"; fi
+  if [[ ${PASS_FROM_CLI:-0} -ne 1 && -n "${dbPass:-}" ]]; then PASS="$dbPass"; fi
+
+  # Optional: allow credentials to define SQLBIN via dbSqlBin
+  if [[ -z "$SQLBIN" && -n "${dbSqlBin:-}" ]]; then
+    SQLBIN="$dbSqlBin"
   fi
 }
 
 # ------------------------- MYSQL WRAPPER -------------------------------
 run_mysql() {
-  # Usage: run_mysql [mysql options...] -- -e "SQL"
+  # Usage: run_mysql [mysql options...]
   "${SQLBIN}${SQLCLI}" "$@"
 }
 
 # ------------------------- MAIN LOGIC ----------------------------------
 main() {
   parse_args "$@"
+  load_credentials
 
   # Normalize SQLBIN: add trailing slash if non-empty
   if [[ -n "$SQLBIN" ]]; then
@@ -228,7 +296,6 @@ main() {
   log_info "Exporting users and grants from ${HOST}:${PORT} using ${SQLCLI}..."
 
   # Build SQL to get user list
-  # Base WHERE: non-empty user
   local sql_userlist
   sql_userlist="SELECT CONCAT(\"'\",User,\"'@'\",Host,\"'\") FROM mysql.user WHERE User <> ''"
 
@@ -239,7 +306,6 @@ main() {
 
   # Apply prefix filter if provided: User LIKE 'prefix%'
   if [[ -n "$USER_PREFIX" ]]; then
-    # Escape single quotes in prefix, just in case
     local escaped_prefix
     escaped_prefix=$(printf "%s" "$USER_PREFIX" | sed "s/'/''/g")
     sql_userlist+=" AND User LIKE '${escaped_prefix}%'"
