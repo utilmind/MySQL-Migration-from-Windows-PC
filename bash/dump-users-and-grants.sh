@@ -23,11 +23,12 @@
 #      - For each user, generates SQL statements that:
 #          * create the user on the target server (IF NOT EXISTS),
 #          * re-apply all privileges using SHOW GRANTS output.
-#      - Writes everything into _users_and_grants.sql so that it can be
+#      - Writes everything into the specified SQL file so that it can be
 #        imported before or together with database dumps.
 #
 #  Credentials:
-#    This script can load connection settings from:
+#    This script can load connection settings from files located in the
+#    same directory as this script:
 #      - .credentials.sh
 #      - .<config-name>.credentials.sh
 #
@@ -40,11 +41,9 @@
 #      # dbSqlBin="/usr/bin"   # path to mysql/mariadb client bin dir
 #
 #  Usage:
-#    Modern (recommended) syntax:
-#      dump-users-and-grants.sh [options]
+#    dump-users-and-grants.sh [options] /path/to/users-and-grants.sql
 #
-#    Legacy positional syntax (for compatibility with Windows .bat style):
-#      dump-users-and-grants.sh [SQLBIN] [HOST] [PORT] [USER] [PASSWORD] [OUTDIR] [OUTFILE]
+#    The first non-option argument is treated as the output SQL file path.
 #
 #  License: MIT
 ###############################################################################
@@ -59,25 +58,22 @@ SQLBIN=""
 # Client binary name; can be overridden via environment (export SQLCLI=...)
 SQLCLI="${SQLCLI:-mysql}"
 
-# Output folder for _users_and_grants.sql
-OUTDIR="./_db-dumps"
-
 # Connection params (may be overridden by credentials and/or CLI)
 HOST="localhost"
 PORT="3306"
 USER="root"
 PASS=""
 
-# Remember what was set explicitly via CLI / positional args
+# Remember what was set explicitly via CLI options
 HOST_FROM_CLI=0
 PORT_FROM_CLI=0
 USER_FROM_CLI=0
 PASS_FROM_CLI=0
 
-# Output file (can be overridden; if empty, will be set after OUTDIR known)
+# Output SQL file (required; can be set via --outfile or first positional arg)
 USERDUMP=""
 
-# Log and temporary files (will be derived from OUTDIR)
+# Log and temporary files (derived from USERDUMP directory)
 LOG=""
 USERLIST=""
 TMPGRANTS=""
@@ -98,7 +94,7 @@ print_help() {
 dump-users-and-grants.sh - Export MySQL / MariaDB users and grants
 
 Usage:
-  dump-users-and-grants.sh [options]
+  dump-users-and-grants.sh [options] /path/to/users-and-grants.sql
 
 Options:
   --config NAME        Use .NAME.credentials.sh instead of .credentials.sh
@@ -108,8 +104,7 @@ Options:
   --port PORT          Database port (default: ${PORT})
   --user USER          Database user (default: ${USER})
   --password PASS      Database password (use with care; if omitted, you will be prompted).
-  --outdir DIR         Output directory for generated files (default: ${OUTDIR})
-  --outfile FILE       Output SQL file (default: OUTDIR/_users_and_grants.sql)
+  --outfile FILE       Output SQL file (alternative to positional FILE argument).
   --user-prefix PREFIX Export only users whose *name* starts with PREFIX
                        (User LIKE 'PREFIX%'; host is not filtered).
   --include-system-users
@@ -117,24 +112,15 @@ Options:
                        (root, mysql.sys, mariadb.sys, etc.).
   -h, --help           Show this help and exit.
 
-Legacy positional syntax (still supported, but deprecated):
-  dump-users-and-grants.sh [SQLBIN] [HOST] [PORT] [USER] [PASSWORD] [OUTDIR] [OUTFILE]
-
 Notes:
+  - The first non-option argument is treated as the output SQL file path.
   - Connection precedence:
       CLI options > .<config>.credentials.sh > built-in defaults.
-  - The script generates:
-      * SET sql_log_bin=0; at the beginning,
-      * CREATE USER IF NOT EXISTS statements,
-      * GRANT statements based on SHOW GRANTS,
-      * SET sql_log_bin=1; at the end.
-  - Import this file before or together with your database dumps.
+  - Import the generated file before or together with your database dumps.
 EOF
 }
 
-
 # ANSI colors (disabled if NO_COLOR is set or output is not a TTY)
-# ------------
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_RESET=$'\033[0m'
   C_ERR=$'\033[1;31m'
@@ -150,11 +136,8 @@ log_ok()   { printf "%s[ OK ]%s %s\n" "$C_OK"   "$C_RESET" "$*"; }
 log_warn() { printf "%s[WARN]%s %s\n" "$C_WARN" "$C_RESET" "$*"; }
 log_err()  { printf "%s[FAIL]%s %s\n" "$C_ERR"  "$C_RESET" "$*"; }
 
-
 # ------------------------- ARG PARSING ---------------------------------
 parse_args() {
-  local positional=()
-
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --config)
@@ -169,8 +152,6 @@ parse_args() {
         USER="$2"; USER_FROM_CLI=1; shift 2 ;;
       --password)
         PASS="$2"; PASS_FROM_CLI=1; shift 2 ;;
-      --outdir)
-        OUTDIR="$2"; shift 2 ;;
       --outfile)
         USERDUMP="$2"; shift 2 ;;
       --user-prefix)
@@ -189,31 +170,37 @@ parse_args() {
         print_help
         exit 1 ;;
       *)
-        positional+=("$1"); shift ;;
+        # First non-option argument is the output file
+        if [[ -z "$USERDUMP" ]]; then
+          USERDUMP="$1"
+          shift
+        else
+          log_err "Unexpected extra positional argument: $1"
+          echo
+          print_help
+          exit 1
+        fi
+        ;;
     esac
   done
 
-  # Append any remaining parameters as positional
+  # Handle any remaining args after "--"
   while [[ $# -gt 0 ]]; do
-    positional+=("$1"); shift
+    if [[ -z "$USERDUMP" ]]; then
+      USERDUMP="$1"
+    else
+      log_err "Unexpected extra positional argument: $1"
+      echo
+      print_help
+      exit 1
+    fi
+    shift
   done
-
-  # Legacy positional mapping:
-  # [0]=SQLBIN [1]=HOST [2]=PORT [3]=USER [4]=PASS [5]=OUTDIR [6]=OUTFILE
-  if [[ ${#positional[@]} -gt 0 ]]; then
-    if [[ -n "${positional[0]:-}" ]]; then SQLBIN="${positional[0]}"; fi
-    if [[ -n "${positional[1]:-}" ]]; then HOST="${positional[1]}"; HOST_FROM_CLI=1; fi
-    if [[ -n "${positional[2]:-}" ]]; then PORT="${positional[2]}"; PORT_FROM_CLI=1; fi
-    if [[ -n "${positional[3]:-}" ]]; then USER="${positional[3]}"; USER_FROM_CLI=1; fi
-    if [[ -n "${positional[4]:-}" ]]; then PASS="${positional[4]}"; PASS_FROM_CLI=1; fi
-    if [[ -n "${positional[5]:-}" ]]; then OUTDIR="${positional[5]}"; fi
-    if [[ -n "${positional[6]:-}" ]]; then USERDUMP="${positional[6]}"; fi
-  fi
 }
 
 # -------------------- CREDENTIALS LOADING ------------------------------
 load_credentials() {
-  # Determine script directory
+  # Determine script directory (where this .sh file lives)
   local base_dir cred_file
   base_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -231,7 +218,6 @@ load_credentials() {
     if [[ -n "$CONFIG_NAME" ]]; then
       log_warn "Credentials file not found: ${cred_file}"
     fi
-    return
   fi
 
   # Apply credentials → internal HOST/PORT/USER/PASS (if not overridden by CLI)
@@ -248,7 +234,6 @@ load_credentials() {
 
 # ------------------------- MYSQL WRAPPER -------------------------------
 run_mysql() {
-  # Usage: run_mysql [mysql options...]
   "${SQLBIN}${SQLCLI}" "$@"
 }
 
@@ -256,6 +241,14 @@ run_mysql() {
 main() {
   parse_args "$@"
   load_credentials
+
+  # Require output file
+  if [[ -z "$USERDUMP" ]]; then
+    log_err "Output SQL file is required. Pass it as the first positional argument or use --outfile FILE."
+    echo
+    print_help
+    exit 1
+  fi
 
   # Normalize SQLBIN: add trailing slash if non-empty
   if [[ -n "$SQLBIN" ]]; then
@@ -270,18 +263,18 @@ main() {
     fi
   fi
 
-  # Set derived paths
-  mkdir -p "$OUTDIR" || {
-    log_err "Failed to create output directory: ${OUTDIR}"
+  # Derive directory for logs / temp from USERDUMP
+  local OUTDIR_INTERNAL
+  OUTDIR_INTERNAL="$(dirname -- "$USERDUMP")"
+
+  mkdir -p "$OUTDIR_INTERNAL" || {
+    log_err "Failed to create directory for output file: ${OUTDIR_INTERNAL}"
     exit 1
   }
 
-  if [[ -z "$USERDUMP" ]]; then
-    USERDUMP="${OUTDIR}/_users_and_grants.sql"
-  fi
-  LOG="${OUTDIR}/_users_errors.log"
-  USERLIST="${OUTDIR}/__user-list.txt"
-  TMPGRANTS="${OUTDIR}/__grants_tmp.txt"
+  LOG="${OUTDIR_INTERNAL}/_users_errors.log"
+  USERLIST="${OUTDIR_INTERNAL}/__user-list.txt"
+  TMPGRANTS="${OUTDIR_INTERNAL}/__grants_tmp.txt"
 
   # Ask for password if still empty
   if [[ -z "$PASS" ]]; then
@@ -294,6 +287,7 @@ main() {
   rm -f "$LOG" "$USERLIST" "$TMPGRANTS" "$USERDUMP"
 
   log_info "Exporting users and grants from ${HOST}:${PORT} using ${SQLCLI}..."
+  log_info "Output file: ${USERDUMP}"
 
   # Build SQL to get user list
   local sql_userlist
