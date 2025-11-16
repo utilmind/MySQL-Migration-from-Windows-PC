@@ -5,6 +5,7 @@ set -euo pipefail
 # CONFIGURATION
 # Optionally specify table prefixes to export.
 # Specify them only as bash array, even if only one prefix is used. Strings are not accepted.
+# Alternatively these table prefixes can be specified in `.configuration-name.credentials.sh` file.
 #dbTablePrefix=('table_prefix1_' 'table_prefix2_' 'bot_' 'email_' 'user_')
 
 
@@ -103,15 +104,15 @@ dump-name.sql (Required)
     The exported filename can automatically contain current date.
     If filename contains '@', it will be replaced with current date YYYYMMDD.
     Example:
-        $scriptName exported_data_@.sql silkcards
+        $scriptName exported_data_@.sql configuration-name
     (So this tool can be executed by the crontab to produce daily files with unique names.)
 
 database-name (Optional)
-    Used to locate credentials file with name ".database-name.credentials.sh"
+    Used to locate credentials file with name ".configuration-name.credentials.sh"
     placed in the same directory as this script.
     If not provided, then ".credentials.sh" will be used.
 
-    DB credentials file example (.credentials.sh or .silkcards.credentials.sh):
+    DB credentials file example (.credentials.sh or .configuration-name.credentials.sh):
 
         #!/bin/bash
         dbHost='localhost'
@@ -248,7 +249,7 @@ mysqlConnOpts=(
 # ---------------- BUILD TABLE FILTER (PREFIXES) ----------------
 
 # Build SQL WHERE for multiple prefixes
-# Example result: (table_name LIKE 'silk\_%' OR table_name LIKE 'beta\_%')
+# Example result: (table_name LIKE 'user\_%' OR table_name LIKE 'beta\_%')
 like_clause=""
 for p in "${dbTablePrefix[@]}"; do
     esc=${p//\'/\'\'}     # escape single quotes
