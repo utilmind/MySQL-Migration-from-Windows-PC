@@ -59,19 +59,6 @@ set "ONE_MODE=0"
 REM If you want to automatically export users/grants, set this to 1 and ensure the second .bat exists. Included in the beginning of FULL dump.
 set "EXPORT_USERS_AND_GRANTS=1"
 
-REM Extended INSERTs:
-REM   0 = OFF  -> add --skip-extended-insert (INSERT one record)
-REM   1 = ON   -> use default dump behavior (multiple INSERT's in single block)
-set "USE_EXTENDED_INSERT=1"
-
-REM Dump options common for all databases
-REM --force = continue dump even in case of errors. Dump will be prepared even if some databases/tables are crashed. (W/o crashed tables)
-set "COMMON_OPTS=--single-transaction --routines --events --triggers --hex-blob --default-character-set=utf8mb4 --create-options --add-drop-database --force"
-if "%USE_EXTENDED_INSERT%"=="0" (
-  REM --skip-extended-insert: one-row-per-INSERT (easier to debug, avoids huge packets)
-  set "COMMON_OPTS=%COMMON_OPTS% --skip-extended-insert"
-)
-
 REM Remove compatibility comments + add missing options to the `CREATE TABLE` statements.
 REM     * The MySQL Dump put compatibility comments for earlier versions. E.g `CREATE TRIGGER` is not supported by ancient MySQL versions.
 REM       And the MySQL Dump wraps those instructons in to magic comments, like /*!50003 CREATE*/ /*!50017 DEFINER=`user`@`host`*/ /*!50003 TRIGGER ... END */,
@@ -85,6 +72,31 @@ set "REMOVE_COMPATIBILITY_COMMENTS=1"
 REM The file name appendix for dumps clean of the compatibility comments. E.g. mydata.sql -> mydata.clean.sql
 set "COMPATIBILITY_COMMENTS_APPENDIX=.clean"
 set "COMPATIBILITY_COMMENTS_REMOVER=python strip-mysql-compatibility-comments.py"
+
+REM Dump options common for all databases
+REM --force = continue dump even in case of errors. Dump will be prepared even if some databases/tables are crashed. (W/o crashed tables)
+set "COMMON_OPTS=--single-transaction --routines --events --triggers"
+set "COMMON_OPTS=%COMMON_OPTS% --hex-blob"
+set "COMMON_OPTS=%COMMON_OPTS% --default-character-set=utf8mb4"
+set "COMMON_OPTS=%COMMON_OPTS% --create-options"
+
+REM Don't add into dump statements like `SET @@GLOBAL.GTID_PURGED=...`. GTID (Global Transaction ID) is used for replication mechanism.
+REM So the dump is easier to import into server that already have own GTID history or GTID not used.
+set "COMMON_OPTS=%COMMON_OPTS% --set-gtid-purged=OFF"
+
+REM Continue dump even in case of some error. You can read all errors combined in the log. (Usually '_errors-dump.log' in the dump folder.)
+set "COMMON_OPTS=%COMMON_OPTS% --force"
+
+REM Drop database before import, to recreate it from scratch.
+REM Good only for total recreation of database from the FULL dump. Not suitable if you make partial import of some specific tables.
+REM set "COMMON_OPTS=%COMMON_OPTS% --add-drop-database"
+
+REM Turn off dump of the information_schema.COLUMN_STATISTICS.
+REM Uncomment the next line if you're trying to dump from newer MySQL server (v8+) to lower, w/o information_schema.COLUMN_STATISTICS.
+REM set "COMMON_OPTS=%COMMON_OPTS% --column-statistics=0"
+
+REM Uncomment the next line to dump/import one-row-per-INSERT (easier to debug, avoids huge packets). Otherwise (default) make multiple INSERT's in single block.
+REM set "COMMON_OPTS=%COMMON_OPTS% --skip-extended-insert"
 REM ================== END CONFIG ==============
 
 REM Filename used if we dump ALL databases
