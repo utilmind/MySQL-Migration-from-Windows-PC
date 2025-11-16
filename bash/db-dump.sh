@@ -1,6 +1,32 @@
 #!/bin/bash
+###############################################################################
+#  Database Dump Utility (db-dump.sh)
+#
+#  Description:
+#      Safe, portable, prefix-aware MySQL/MariaDB dump tool.
+#      - Supports per-environment configuration files.
+#      - Supports selective table exports (prefix-based).
+#      - Generates reproducible UTF-8 dumps with consistent CREATE TABLE clauses.
+#      - Optionally post-processes dumps with Python to restore original
+#        charset/collation/table options for cross-server imports.
+#      - Compresses resulting dump into .rar archive.
+#
+#  Usage:
+#      ./db-dump.sh dump-name.sql [database-name]
+#
+#  License: MIT
+#  Repository: https://github.com/utilmind/MySQL-migration-tools
+#
+#  (c) utilmind, 2012-2025
+#    15.10.2024: Each dump have date, don't overwrite past days backups. Old backups can be deleted by garbage collector.
+#    26.08.2025: Multiple table prefixes.
+#    15.11.2025: Request password if not specified in configuration;
+#                Process dump to remove MySQL compatibility comments
+#                + provide missing details (server defaults) to the 'CREATE TABLE' statements
+#                  (to solve issues with collations on import).
+#                (These features require Python3+ installed.)
+###############################################################################
 set -euo pipefail
-
 
 # CONFIGURATION
 # Optionally specify table prefixes to export.
@@ -92,6 +118,27 @@ COMMON_OPTS+=( --column-statistics=0 )
 #               and asynchronization of server instance time with database server time.
 # ======================================================================================
 
+# ANSI colors (disabled if NO_COLOR is set or output is not a TTY)
+# ------------
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    COLOR_INFO="\033[1;34m"
+    COLOR_WARN="\033[1;33m"
+    COLOR_ERROR="\033[1;31m"
+    COLOR_OK="\033[1;32m"
+    COLOR_RESET="\033[0m"
+else
+    COLOR_INFO=""
+    COLOR_WARN=""
+    COLOR_ERROR=""
+    COLOR_OK=""
+    COLOR_RESET=""
+fi
+
+log_info()  { printf "%b[INFO]%b %s\n"  "$COLOR_INFO" "$COLOR_RESET" "$*"; }
+log_warn()  { printf "%b[WARN]%b %s\n"  "$COLOR_WARN" "$COLOR_RESET" "$*"; }
+log_error() { printf "%b[ERROR]%b %s\n" "$COLOR_ERROR" "$COLOR_RESET" "$*"; }
+log_ok()    { printf "%b[OK]%b %s\n"    "$COLOR_OK" "$COLOR_RESET" "$*"; }
+
 
 # FUNCTIONS
 # ------------
@@ -157,7 +204,7 @@ while [[ "$1" == -* ]] ; do
             break
             ;;
         *)
-            echo "ERROR: Invalid parameter: '$1'"
+            log_error "ERROR: Invalid parameter: '$1'"
             exit 1
             ;;
     esac
@@ -168,7 +215,7 @@ done
 #   2) database-name (optional)
 if [ $# -lt 1 ]; then
     scriptName=$(basename "$0")
-    echo "ERROR: Missing required parameters."
+    log_error "ERROR: Missing required parameters."
     echo "Usage: $scriptName dump-name.sql [database-name]"
     exit 1
 fi
@@ -210,7 +257,7 @@ else
 fi
 
 if [ ! -r "$credentialsFile" ]; then
-    echo "ERROR: Credentials file '$credentialsFile' not found or not readable."
+    log_error "ERROR: Credentials file '$credentialsFile' not found or not readable."
     echo "Please create it with DB connection settings:"
     echo "  dbHost, dbPort, dbName, dbUsername, [dbPassword], [dbTablePrefix]"
     exit 1
@@ -226,7 +273,7 @@ if [ -z "${dbName:-}" ]; then
     if [ -n "$dbConfigName" ]; then
         dbName="$dbConfigName"
     else
-        echo "ERROR: 'dbName' is not defined in credentials file '$credentialsFile' and no database-name argument was provided."
+        log_error "ERROR: 'dbName' is not defined in credentials file '$credentialsFile' and no database-name argument was provided."
         exit 1
     fi
 fi
@@ -268,7 +315,7 @@ like_clause="($like_clause)"
 #   * fill missing ENGINE / ROW_FORMAT / COLLATION in CREATE TABLE
 #   * keep resulting schema as close to original server as possible.
 
-echo "Dumping table metadata to '$tablesMetaFilename' ..."
+log_info "Dumping table metadata to '$tablesMetaFilename' ..."
 if ! mysql "${mysqlConnOpts[@]}" -N \
     -e "SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE, ROW_FORMAT, TABLE_COLLATION
         FROM INFORMATION_SCHEMA.TABLES
@@ -277,7 +324,7 @@ if ! mysql "${mysqlConnOpts[@]}" -N \
           AND TABLE_NAME NOT LIKE '%_backup_%'
         ORDER BY TABLE_SCHEMA, TABLE_NAME;" > "$tablesMetaFilename"
 then
-    echo "WARNING: Failed to dump table metadata. TSV will be missing, CREATE TABLE enhancement may be skipped." >&2
+    log_warn "WARNING: Failed to dump table metadata. TSV will be missing, CREATE TABLE enhancement may be skipped." >&2
 fi
 
 
@@ -315,26 +362,27 @@ mysql "${mysqlConnOpts[@]}" -N "$dbName" \
         ORDER BY table_name" > "$allTablesFilename"
 
 
-# ---------------- OPTIMIZE NON-INNODB TABLES ----------------
+# ---------------- OPTIMIZE / ANALYZE TABLES ----------------
 
 # Optimize MyISAM tables, to export data faster.
+# NOTE (AK 2025-10-04): we don't need to optimize InnoDB tables. And we mostly have InnoDB.
 if [ -s "$myisamTablesFilename" ]; then
-    echo Optimizing MyISAM tables...
+    log_info "Optimizing MyISAM tables..."
     mysqlcheck --optimize --verbose \
         "${mysqlConnOpts[@]}" \
         --databases "$dbName" \
         --tables $(cat "$myisamTablesFilename" | xargs) \
-    || echo "WARNING: Failed to optimize MyISAM tables (probably insufficient privileges). Continuing without optimization." >&2
+    || log_warn "WARNING: Failed to optimize MyISAM tables ... insufficient privileges). Continuing without optimization." >&2
 fi
 
 # Analyze InnoDB tables to optimize further queries.
 if [ -s "$innoDBTablesFilename" ]; then
-    echo Analyizing InnoDB tables...
+    log_info "Analyzing InnoDB tables..."
     mysqlcheck --analyze --verbose \
         "${mysqlConnOpts[@]}" \
         --databases "$dbName" \
         --tables $(cat "$innoDBTablesFilename" | xargs) \
-    || echo "WARNING: Failed to analyze InnoDB tables (probably insufficient privileges). Continuing without analyze." >&2
+    || log_warn "WARNING: Failed to analyze InnoDB tables (...bably insufficient privileges). Continuing without analyze." >&2
 fi
 # ---------------- DUMP DATABASE ----------------
 
@@ -362,17 +410,17 @@ postProcessor="$scriptDir/strip-mysql-compatibility-comments.py"
 if [ -f "$postProcessor" ]; then
     if command -v python3 >/dev/null 2>&1; then
         tmpProcessed="${targetFilename%.sql}.clean.sql"
-        #echo "Post-processing dump with Python script: $postProcessor"
-        #echo "  Input : $targetFilename"
-        #echo "  Output: $tmpProcessed"
-        #echo "  TSV   : $tablesMetaFilename"
+        #log_info "Post-processing dump with Python script: $postProcessor"
+        #log_info "  Input : $targetFilename"
+        #log_info "  Output: $tmpProcessed"
+        #log_info "  TSV   : $tablesMetaFilename"
         python3 "$postProcessor" "$targetFilename" "$tmpProcessed" "$tablesMetaFilename"
         mv "$tmpProcessed" "$targetFilename"
     else
-        echo "WARNING: Python3 is not installed; skipping dump post-processing." >&2
+        log_warn "WARNING: Python3 is not installed; skipping dump post-processing." >&2
     fi
 else
-    echo "WARNING: Dump post-processing script not found: $postProcessor; skipping." >&2
+    log_warn "WARNING: Dump post-processing script not found: $postProcessor; skipping." >&2
 fi
 
 
