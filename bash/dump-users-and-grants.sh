@@ -10,67 +10,40 @@
 #    Helper script for exporting MySQL / MariaDB users and privileges
 #    into a standalone SQL file.
 #
-#    Features:
-#      - Connects to the server using the configured client binary
-#        (mysql or mariadb).
-#      - Reads connection settings from:
-#          * CLI options,
-#          * .credentials.sh or .<config>.credentials.sh,
-#          * built-in defaults (fallback).
-#      - Queries mysql.user to obtain the list of non-system accounts.
-#      - Skips internal / system users (root, mysql.sys, etc.) by default.
-#      - Optional filter by user name prefix (User LIKE 'prefix%').
-#      - For each user, generates SQL statements that:
-#          * create the user on the target server (IF NOT EXISTS),
-#          * re-apply all privileges using SHOW GRANTS output.
-#      - Writes everything into the specified SQL file so that it can be
-#        imported before or together with database dumps.
-#
-#  Credentials:
-#    This script can load connection settings from files located in the
-#    same directory as this script:
+#    Connection settings are loaded from:
 #      - .credentials.sh
-#      - .<config-name>.credentials.sh
+#      - or .<config>.credentials.sh when --config <config> is used.
 #
 #    Expected variables in credentials file:
 #      dbHost="localhost"
 #      dbPort="3306"
 #      dbUser="silkcards_dump"
 #      dbPass="secret"
-#      # optional:
-#      # dbSqlBin="/usr/bin"   # path to mysql/mariadb client bin dir
+#
+#    The MySQL client is expected to be available as "mysql" in PATH.
 #
 #  Usage:
 #    dump-users-and-grants.sh [options] /path/to/users-and-grants.sql
 #
-#    The first non-option argument is treated as the output SQL file path.
+#    The first non-option argument is the output SQL file path.
 #
 #  License: MIT
 ###############################################################################
 
-# --------------------------- DEFAULTS ----------------------------------
-# Configuration profile name (maps to .<config>.credentials.sh)
+# --------------------------- CONSTANTS ---------------------------------
+# Internal configuration profile name (used only for picking credentials file)
 CONFIG_NAME=""
 
-# Path to bin folder (MariaDB or MySQL).
-SQLBIN=""
+# MySQL client executable name (from PATH)
+SQLCLI="mysql"
 
-# Client binary name; can be overridden via environment (export SQLCLI=...)
-SQLCLI="${SQLCLI:-mysql}"
-
-# Connection params (may be overridden by credentials and/or CLI)
-HOST="localhost"
-PORT="3306"
-USER="root"
+# Connection params (will be filled from credentials; may fall back to defaults)
+HOST=""
+PORT=""
+USER=""
 PASS=""
 
-# Remember what was set explicitly via CLI options
-HOST_FROM_CLI=0
-PORT_FROM_CLI=0
-USER_FROM_CLI=0
-PASS_FROM_CLI=0
-
-# Output SQL file (required; can be set via --outfile or first positional arg)
+# Output SQL file (REQUIRED; set via first positional argument)
 USERDUMP=""
 
 # Log and temporary files (derived from USERDUMP directory)
@@ -99,12 +72,6 @@ Usage:
 Options:
   --config NAME        Use .NAME.credentials.sh instead of .credentials.sh
                        for connection settings (dbHost, dbPort, dbUser, dbPass).
-  --sqlbin PATH        Path to directory with mysql/mariadb client binary.
-  --host HOST          Database host (default: ${HOST})
-  --port PORT          Database port (default: ${PORT})
-  --user USER          Database user (default: ${USER})
-  --password PASS      Database password (use with care; if omitted, you will be prompted).
-  --outfile FILE       Output SQL file (alternative to positional FILE argument).
   --user-prefix PREFIX Export only users whose *name* starts with PREFIX
                        (User LIKE 'PREFIX%'; host is not filtered).
   --include-system-users
@@ -113,12 +80,14 @@ Options:
   -h, --help           Show this help and exit.
 
 Notes:
-  - The first non-option argument is treated as the output SQL file path.
-  - Connection precedence:
-      CLI options > .<config>.credentials.sh > built-in defaults.
-  - Import the generated file before or together with your database dumps.
+  - Connection settings are not configurable via CLI; they come only
+    from credentials files:
+      .credentials.sh
+      .<config>.credentials.sh (when --config <config> is used).
+  - The first non-option argument is the output SQL file path.
 EOF
 }
+
 
 # ANSI colors (disabled if NO_COLOR is set or output is not a TTY)
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -136,24 +105,13 @@ log_ok()   { printf "%s[ OK ]%s %s\n" "$C_OK"   "$C_RESET" "$*"; }
 log_warn() { printf "%s[WARN]%s %s\n" "$C_WARN" "$C_RESET" "$*"; }
 log_err()  { printf "%s[FAIL]%s %s\n" "$C_ERR"  "$C_RESET" "$*"; }
 
+
 # ------------------------- ARG PARSING ---------------------------------
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --config)
         CONFIG_NAME="$2"; shift 2 ;;
-      --sqlbin)
-        SQLBIN="$2"; shift 2 ;;
-      --host)
-        HOST="$2"; HOST_FROM_CLI=1; shift 2 ;;
-      --port)
-        PORT="$2"; PORT_FROM_CLI=1; shift 2 ;;
-      --user)
-        USER="$2"; USER_FROM_CLI=1; shift 2 ;;
-      --password)
-        PASS="$2"; PASS_FROM_CLI=1; shift 2 ;;
-      --outfile)
-        USERDUMP="$2"; shift 2 ;;
       --user-prefix)
         USER_PREFIX="$2"; shift 2 ;;
       --include-system-users)
@@ -198,6 +156,7 @@ parse_args() {
   done
 }
 
+
 # -------------------- CREDENTIALS LOADING ------------------------------
 load_credentials() {
   # Determine script directory (where this .sh file lives)
@@ -217,51 +176,43 @@ load_credentials() {
   else
     if [[ -n "$CONFIG_NAME" ]]; then
       log_warn "Credentials file not found: ${cred_file}"
+    else
+      log_warn "Credentials file not found: ${cred_file}; using built-in defaults."
     fi
   fi
 
-  # Apply credentials → internal HOST/PORT/USER/PASS (if not overridden by CLI)
-  if [[ ${HOST_FROM_CLI:-0} -ne 1 && -n "${dbHost:-}" ]]; then HOST="$dbHost"; fi
-  if [[ ${PORT_FROM_CLI:-0} -ne 1 && -n "${dbPort:-}" ]]; then PORT="$dbPort"; fi
-  if [[ ${USER_FROM_CLI:-0} -ne 1 && -n "${dbUser:-}" ]]; then USER="$dbUser"; fi
-  if [[ ${PASS_FROM_CLI:-0} -ne 1 && -n "${dbPass:-}" ]]; then PASS="$dbPass"; fi
+  # Apply credentials → internal HOST/PORT/USER/PASS
+  # IMPORTANT: expected variable names in credentials:
+  #   dbHost, dbPort, dbUser, dbPass
+  if [[ -n "${dbHost:-}" ]]; then HOST="$dbHost"; fi
+  if [[ -n "${dbPort:-}" ]]; then PORT="$dbPort"; fi
+  if [[ -n "${dbUser:-}" ]]; then USER="$dbUser"; fi
+  if [[ -n "${dbPass:-}" ]]; then PASS="$dbPass"; fi
 
-  # Optional: allow credentials to define SQLBIN via dbSqlBin
-  if [[ -z "$SQLBIN" && -n "${dbSqlBin:-}" ]]; then
-    SQLBIN="$dbSqlBin"
-  fi
+  # Fallbacks if some fields are still empty
+  [[ -z "$HOST" ]] && HOST="localhost"
+  [[ -z "$PORT" ]] && PORT="3306"
+  [[ -z "$USER" ]] && USER="root"
 }
 
 # ------------------------- MYSQL WRAPPER -------------------------------
 run_mysql() {
-  "${SQLBIN}${SQLCLI}" "$@"
+  "$SQLCLI" "$@"
 }
 
 # ------------------------- MAIN LOGIC ----------------------------------
 main() {
   parse_args "$@"
-  load_credentials
 
   # Require output file
   if [[ -z "$USERDUMP" ]]; then
-    log_err "Output SQL file is required. Pass it as the first positional argument or use --outfile FILE."
+    log_err "Output SQL file is required. Pass it as the first positional argument."
     echo
     print_help
     exit 1
   fi
 
-  # Normalize SQLBIN: add trailing slash if non-empty
-  if [[ -n "$SQLBIN" ]]; then
-    case "$SQLBIN" in
-      */) : ;;
-      *)  SQLBIN="${SQLBIN}/" ;;
-    esac
-    if [[ ! -x "${SQLBIN}${SQLCLI}" ]]; then
-      log_err "Client '${SQLCLI}' not found at '${SQLBIN}${SQLCLI}'."
-      printf 'Please edit %s and adjust the SQLBIN / SQLCLI variables.\n' "$(basename "$0")" >&2
-      exit 1
-    fi
-  fi
+  load_credentials
 
   # Derive directory for logs / temp from USERDUMP
   local OUTDIR_INTERNAL
@@ -276,7 +227,13 @@ main() {
   USERLIST="${OUTDIR_INTERNAL}/__user-list.txt"
   TMPGRANTS="${OUTDIR_INTERNAL}/__grants_tmp.txt"
 
-  # Ask for password if still empty
+  # Check that mysql client is available
+  if ! command -v "$SQLCLI" >/dev/null 2>&1; then
+    log_err "MySQL client '${SQLCLI}' not found in PATH."
+    exit 1
+  fi
+
+  # Ask for password if still empty (only as a fallback)
   if [[ -z "$PASS" ]]; then
     printf "Enter password for %s@%s (input will be hidden): " "$USER" "$HOST"
     read -r -s PASS
@@ -288,6 +245,7 @@ main() {
 
   log_info "Exporting users and grants from ${HOST}:${PORT} using ${SQLCLI}..."
   log_info "Output file: ${USERDUMP}"
+  log_info "User prefix filter: ${USER_PREFIX:-<none>}"
 
   # Build SQL to get user list
   local sql_userlist
