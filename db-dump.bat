@@ -75,44 +75,60 @@ REM Replace 'python' to 'python3' or 'py', depending under which name the Python
 set "COMPATIBILITY_COMMENTS_REMOVER=python strip-mysql-compatibility-comments.py"
 
 REM Dump options common for all databases
-REM --force = continue dump even in case of errors. Dump will be prepared even if some databases/tables are crashed. (W/o crashed tables)
-set "COMMON_OPTS=--single-transaction --routines --events --triggers"
+REM NOTE: These options affect every dump produced by this script.
+REM       Keep them conservative for maximum compatibility.
+set "COMMON_OPTS=--routines --events --triggers --single-transaction --quick"
 
-REM Continue dump even in case of some error. You can read all errors combined in the log. (Usually '_errors-dump.log' in the dump folder.)
+REM --routines/--events/--triggers: include stored routines, events, and triggers.
+REM --single-transaction: take a consistent snapshot without locking tables (InnoDB only).
+REM --quick: stream rows row-by-row to reduce memory usage on large tables. (--single-transaction w/o row-by-row streaming can be slow and overload RAM.)
+
+REM Continue the dump even if some statements fail. Check the LOG file afterwards. (Usually '_errors-dump.log' in the dump folder.)
 set "COMMON_OPTS=%COMMON_OPTS% --force"
 
-REM Use this charset as default for dumps. This however doesn't affects the collations.
-REM So use REMOVE_COMPATIBILITY_COMMENTS=1 to add correct collation option to the `CREATE TABLE` statement.
+REM Use UTF-8 for the client/server connection.
+REM NOTE that MySQL does NOT emit explicit COLLATE clauses in `CREATE TABLE` for columns/tables that use
+REM the database default collation. Such dumps implicitly depend on the original server defaults. If you
+REM import them on a server with different defaults, REM uniqueness and comparison rules may change. The
+REM post-processing step (REMOVE_COMPATIBILITY_COMMENTS=1) REM restores the original charset and collation
+REM into each `CREATE TABLE` to prevent this.
 set "COMMON_OPTS=%COMMON_OPTS% --default-character-set=utf8mb4"
 
-REM Add all standard non-default options to the `CREATE TABLE` statements. This adds options even if you skip the post-processing of dump with REMOVE_COMPATIBILITY_COMMENTS=0.
+REM Include standard non-default CREATE TABLE options (e.g., ROW_FORMAT) for portability.
 set "COMMON_OPTS=%COMMON_OPTS% --create-options"
 
-REM Represent binary blobs as hexadecimal strings. So dumps with blobs will take more disk space, but easier to open and read with text editor.
-REM Comment out the next line if you'd prefer having smaller dumps.
+REM Store BLOBs as hex strings. Makes dumps larger but safer/readable in text editors.
+REM Comment the next line out if you prefer smaller files.
 set "COMMON_OPTS=%COMMON_OPTS% --hex-blob"
 
-REM Don't add into dump statements like `SET @@GLOBAL.GTID_PURGED=...`. GTID (Global Transaction ID) is used for replication mechanism.
-REM So the dump is easier to import into server that already have own GTID history or GTID not used.
-set "COMMON_OPTS=%COMMON_OPTS% --set-gtid-purged=OFF"
-
-REM Don't include information about tablespace. (For easier import to MariaDB or other MySQL forks, or to cloud MySQL (RDS, Aurora etc),
-REM where tablespace management is restricted or different. Or for easier import to server where table structure doen't use the same tablespace.
+REM Make dumps more portable between servers (managed MySQL, MariaDB, different versions).
+REM Avoid embedding tablespace directives in CREATE TABLE.
 set "COMMON_OPTS=%COMMON_OPTS% --no-tablespaces"
 
-REM Drop database before import, to recreate it from scratch.
-REM Good only for total recreation of database from the FULL dump. Not suitable if you make partial import of some specific tables.
-REM set "COMMON_OPTS=%COMMON_OPTS% --add-drop-database"
+REM Do NOT inject SET @@GLOBAL.GTID_PURGED into the dump (safer for imports into existing replicas).
+set "COMMON_OPTS=%COMMON_OPTS% --set-gtid-purged=OFF"
 
-REM Turn off dump of the information_schema.COLUMN_STATISTICS.
-REM Uncomment the next line if you're trying to dump from newer MySQL server (v8+) to lower, w/o information_schema.COLUMN_STATISTICS.
+REM ===== Optional, uncomment as needed =====
+
+REM If dumping from MySQL 8.x to older MySQL/MariaDB where COLUMN_STATISTICS is absent, enable:
 REM set "COMMON_OPTS=%COMMON_OPTS% --column-statistics=0"
 
-REM Uncomment the next line to dump/import one-row-per-INSERT (easier to debug, avoids huge packets). Otherwise (default) make multiple INSERT's in single block.
+REM Preserve server local time zone behavior (usually NOT recommended). By default, mysqldump sets UTC.
+REM Only use if your target server lacks time zone tables or you have a strong reason to avoid UTC.
+REM set "COMMON_OPTS=%COMMON_OPTS% --skip-tz-utc"
+
+REM For repeatable imports and better compression, order rows by PRIMARY KEY (if present):
+REM set "COMMON_OPTS=%COMMON_OPTS% --order-by-primary"
+
+REM In pure InnoDB environments, you can skip metadata locks on non-transactional tables:
+REM set "COMMON_OPTS=%COMMON_OPTS% --skip-lock-tables"
+
+REM Drop and recreate the database before importing a full dump (NOT for partial/table-only imports):
+REM set "COMMON_OPTS=%COMMON_OPTS% --add-drop-database"
+
+REM Use one INSERT per row (easier diff/merge; slower/larger). Default is multi-row extended inserts.
 REM set "COMMON_OPTS=%COMMON_OPTS% --skip-extended-insert"
 
-REM Don't translate timestamps to the UTC timezone. (Don't uncomment the following line w/o serious reason. Timestamps should be in UTC, at least in dumpts.)
-REM set "COMMON_OPTS=%COMMON_OPTS% --skip-tz-utc"
 REM ================== END CONFIG ==============
 
 REM Filename used if we dump ALL databases
