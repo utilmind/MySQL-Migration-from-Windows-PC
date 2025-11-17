@@ -255,11 +255,11 @@ Backup tables are ALWAYS excluded:
 
 #### 3) Full-database mode (default)
 
-If **`dbTablePrefix` is not defined**,  
+If **`dbTablePrefix` is not defined** in the configuration (in script body or `.[config-name.]credentials.sh`),  
 or **defined but empty**,  
 and **no explicit table list is provided**,  
 
-then **all** tables from the database are processed (except backup tables):
+then **all** tables from the database are processed (except `_backup_` tables):
 
 ```bash
 ./optimize-tables.sh production
@@ -269,21 +269,17 @@ then **all** tables from the database are processed (except backup tables):
 
 ### ✔ How to run it
 
-#### Using default credentials:
+#### Using default credentials (`.credentials.sh`):
 
 ```bash
 ./optimize-tables.sh
 ```
 
-(using `.credentials.sh`)
-
-#### Using a configuration profile:
+#### Using a configuration profile (`.production.credentials.sh`):
 
 ```bash
 ./optimize-tables.sh production
 ```
-
-(using `.production.credentials.sh`)
 
 #### With explicit table list:
 
