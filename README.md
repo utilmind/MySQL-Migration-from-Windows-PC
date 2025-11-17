@@ -211,10 +211,10 @@ The script [`optimize-tables.sh`](bash/optimize-tables.sh) can be used **indepen
 
 It safely performs:
 
-- `OPTIMIZE TABLE` on **MyISAM** tables  
-- `ANALYZE TABLE` on **InnoDB** tables  
-- Automatically skips unsupported engines  
-- Never modifies table data or structure  
+- `OPTIMIZE TABLE` on **MyISAM** tables
+- `ANALYZE TABLE` on **InnoDB** tables
+- Automatically skips unsupported engines
+- Never modifies table data or structure
 - Excludes backup tables matching `*_backup_*`.<br />
 (Because developers often duplicate existing production table to the `tablename_backup_YYYY-MM-DD` when doing important structural
 changes or data fixes, to quickly roll back everything if something goes wrong, but `*_backup_*` are really not needed in the dump.)
@@ -236,8 +236,8 @@ If the **2nd parameter** contains a quoted list of tables:
 
 Then:
 
-- `dbTablePrefix` is ignored  
-- Only these tables are inspected  
+- `dbTablePrefix` is ignored
+- Only these tables are inspected
 - Their engines are detected via `INFORMATION_SCHEMA`
 
 #### 2) Prefix-based mode (automatic)
@@ -258,9 +258,9 @@ Backup tables are ALWAYS excluded:
 
 #### 3) Full-database mode (default)
 
-If **`dbTablePrefix` is not defined** in the configuration (in script body or `.[config-name.]credentials.sh`),  
-or **defined but empty**,  
-and **no explicit table list is provided**,  
+If **`dbTablePrefix` is not defined** in the configuration (in script body or `.[config-name.]credentials.sh`),
+or **defined but empty**,
+and **no explicit table list is provided**,
 
 then **all** tables from the database are processed (except `_backup_` tables).
 

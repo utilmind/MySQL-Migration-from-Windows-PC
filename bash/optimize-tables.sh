@@ -244,7 +244,8 @@ else
 
     # dbTablePrefix may be undefined or an empty array.
     if [ -n "${dbTablePrefix+x}" ] && [ "${#dbTablePrefix[@]}" -gt 0 ]; then
-        log_info "dbTablePrefix is defined; optimizing only tables matching prefixes."
+        log_info "Optimizing only tables matching prefixes: ${#dbTablePrefix[@]}."
+
         like_clause=""
         for p in "${dbTablePrefix[@]}"; do
             esc=${p//\'/\'\'}        # escape quotes
@@ -257,7 +258,8 @@ else
         done
         where_clause="$where_clause AND ($like_clause)"
     else
-        log_info "dbTablePrefix is not defined or empty; using ALL tables in '$dbName' (excluding *_backup_*)."
+        # log_info "dbTablePrefix is not defined or empty; using ALL tables in '$dbName' (excluding *_backup_*)."
+        log_info "Using ALL tables in '$dbName' (excluding *_backup_*)."
     fi
 
     # Exclude backup tables always
@@ -291,7 +293,7 @@ if [ -s "$myisamTablesFilename" ]; then
     log_info "Optimizing MyISAM tables via mysqlcheck --optimize ..."
     mysqlcheck "${mysqlConnOpts[@]}" \
         --optimize \
-        --databases "$dbName" \
+        "$dbName" \
         $(cat "$myisamTablesFilename")
 else
     log_info "No MyISAM tables selected for optimization."
@@ -301,7 +303,7 @@ if [ -s "$innoDBTablesFilename" ]; then
     log_info "Analyzing InnoDB tables via mysqlcheck --analyze ..."
     mysqlcheck "${mysqlConnOpts[@]}" \
         --analyze \
-        --databases "$dbName" \
+        "$dbName" \
         $(cat "$innoDBTablesFilename")
 else
     log_info "No InnoDB tables selected for analyze."
