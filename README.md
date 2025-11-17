@@ -107,7 +107,8 @@ db-dump.bat --ONE db1 db2 db3    → one combined SQL for selected DBs
 ```
 
 #### 💡 Notes
-* You can also dump remote hosts, specifying the hostname/IP and in the `%HOST%`/`%PORT%` variables.
+* You can also dump remote hosts (not only database server on local PC), specifying
+the hostname/IP and in the `%HOST%`/`%PORT%` variables.
 * Users and grants are dumped automatically and usually prepended to the overall dump (if not skipped).
 But you can also run `dump-users-and-grants.bat` separately to get the list of all non-system users and
 their privileges/grants into SQL file, ready for import into another MySQL/MariaDB database.
@@ -118,19 +119,22 @@ their privileges/grants into SQL file, ready for import into another MySQL/Maria
 
 ### Database Dumps
 
-Single file (recommended):
+Single file (recommended).
+Configuration taken from default [`bash/.sample.credentials.sh`]`.credentials.sh`:
 
 ```bash
 ./db-dump.sh /backups/all-dbs.sql
 ```
 
-Using profile:
+Using configuration profile.<br />
+This one takes credentials from [`bash/.sample.credentials.sh`]`.production.credentials.sh`:
 
 ```bash
 ./db-dump.sh /backups/all-dbs.sql production
 ```
 
-Date-stamped filename:
+Date-stamped filename.<br />
+Dumps all into a single SQL file. Current date in **YYYYMMDD** format substituted instead of **@** character in the file name.
 
 ```bash
 ./db-dump.sh "/backups/db-@.sql" production
@@ -208,7 +212,7 @@ modern MySQL/MariaDB setups, it’s usually unnecessary — and can even cause s
 For example, if a trigger body contains a developer comment `/* ... */` inside
 a versioned block, it may conflict with the outer wrapper and break the SQL import.
 
-The [`strip-mysql-compatibility-comments.py`](strip-mysql-compatibility-comments.py)
+The [`bash/strip-mysql-compatibility-comments.py`](strip-mysql-compatibility-comments.py)
 **removes these compatibility wrappers** while preserving the real developers comments
 in the function/trigger bodies.
 
