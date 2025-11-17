@@ -49,8 +49,8 @@ set -euo pipefail
 
 # CONFIGURATION
 # Optionally specify table prefixes to process for optimization/analyze.
-# This overrides $dbTablePrefisx specified in ".configuration-name.credentials.sh", if uncommented.
-#dbTablePrefix=('table_prefix1_' 'table_prefix2_' 'bot_' 'email_' 'user_')
+# This overrides \$dbTablePrefix specified in ".configuration-name.credentials.sh", if uncommented.
+#dbTablePrefix=('table_prefix1_' 'table_prefix2_' 'bot_' 'email_' 'user_' 'order_')
 
 
 print_help() {
@@ -66,6 +66,11 @@ configuration-name (Optional)
 explicit tables list (Optional, second parameter)
     Quoted space-separated list of tables to process.
     If provided, dbTablePrefix is ignored and only these tables are optimized/analyzed.
+
+If no explicit table list is given:
+    - and dbTablePrefix is defined (non-empty), only tables with these prefixes
+      are processed (excluding *_backup_*),
+    - otherwise, ALL tables in the database are processed (excluding *_backup_*).
 
 Examples:
     $scriptName
