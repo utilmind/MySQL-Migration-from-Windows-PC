@@ -4,14 +4,14 @@ Windows batch (`.bat`) scripts and Linux Bash (`.sh`) utilities for creating SQL
 
 The goal is to create a dump that can be easily imported into **any** MySQL or MariaDB server while preserving:
 
-- stored procedures  
-- functions  
-- triggers  
-- views  
-- DEFINER users  
-- privileges (grants)  
-- table options (charsets, collations, row formats)  
-- data in its *original* encoding, regardless of original server defaults  
+- stored procedures
+- functions
+- triggers
+- views
+- DEFINER users
+- privileges (grants)
+- table options (charsets, collations, row formats)
+- data in its *original* encoding, regardless of original server defaults
 
 These tools let you safely move databases between MySQL/MariaDB servers of different versions, OSes, collation defaults, etc.
 They also perfect for quick deployments of an empty database structure with all initial triggers and their definers (users).
@@ -163,7 +163,7 @@ The script `dump-users-and-grants.sh` exports MySQL/MariaDB users and their gran
 
 It loads connection settings from:
 
-- `.credentials.sh`  
+- `.credentials.sh`
 - or `.NAME.credentials.sh` when using `--config NAME`.
 
 ### Examples
@@ -270,6 +270,6 @@ metadata extracted from information_schema.TABLES.
 
 ## 🧰 To-Do
 
-- Selective user/grant extraction. (When dumping selected databases, include to dump only the relevant users/grants.)  
+- Selective user/grant extraction. (When dumping selected databases, include to dump only the relevant users/grants.)
 - SQL dialect converter (MySQL → PostgreSQL, Oracle, etc.) Yes, this is complicated for stored functions and tiggers,
 but still possible, maybe using AI.
