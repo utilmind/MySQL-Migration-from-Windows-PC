@@ -202,7 +202,7 @@ or:
 
 ---
 
-# 💬 About MySQL Compatibility Comments
+## 💬 About MySQL Compatibility Comments
 
 MySQL and MariaDB dumps often include “versioned” compatibility comments such as:
 
@@ -230,20 +230,43 @@ metadata extracted from information_schema.TABLES.
 
 ---
 
-# 🧠 Migration Advice
+## 🧩 Compatibility Notes
 
-1. Never modify system DBs manually (`mysql`, `sys`, …)  
-2. Don’t copy raw InnoDB files  
-3. Always dump with full charset/collation info  
-4. Log imports during debugging:
-
-```bash
-mysql < dump.sql > errors.log 2>&1
-```
+* Some commands in the dump may be incompatible with very old MySQL versions.
+  For example, `CREATE USER IF NOT EXISTS` appeared only in MySQL 5.7+.
+  If migrating to older versions, replace it with `CREATE USER` and remove the `IF NOT EXISTS` clause.
+* If you encounter more incompatibilities, please open a discussion in the [Issues](../../issues) section or submit a pull request — feel free to update this `README` too.
 
 ---
 
-# 🧰 To-Do
+## 🧠 Important Things to Remember When Migrating MySQL Databases
+
+1. **Never modify system tables or users**
+   (`information_schema`, `performance_schema`, `mysql`, `sys`, and users like `root`, `mariadb.sys`, etc.).
+   If system data gets corrupted, reinstall the database server instead of trying to fix it manually.
+
+2. **Do not copy databases as binary files.**
+   It might work for MyISAM tables but will fail for InnoDB and others.
+
+3. **Be aware of charset and collation differences between servers.**
+   Default character sets often differ between MySQL/MariaDB versions or server configurations.
+   The standard `mysqldump` skips charset/collation options if they match the server defaults — which can lead to corrupted data or collation mismatches after import.
+
+   Example:<br />
+   A field defined as `UNIQUE index` may reject an insert if the new server’s collation treats certain characters as equivalent.
+   For instance, in `utf8mb4_general_ci`, Ukrainian letters **г** and **ґ** are distinct, but in `utf8mb4_uca1400_ai_ci` they are treated as equal.
+   So inserting differnt words like Ukrainian “ґрати” (“gate”) after “грати” (“to play”) would trigger a duplicate-key error.
+   This script prevents such issues by ensuring each `CREATE TABLE` statement fully specifies its original charset, collation, and options.
+
+4. *(Just a tip)* — Errors during import may flash by unnoticed in the terminal.
+   Always redirect them to a log file, e.g.:
+   ```bash
+   mysql -u root -p < _db-dump.sql > errors.log
+   ```
+
+---
+
+## 🧰 To-Do
 
 - Selective user/grant extraction. (When dumping selected databases, include to dump only the relevant users/grants.)  
 - SQL dialect converter (MySQL → PostgreSQL, Oracle, etc.) Yes, this is complicated for stored functions and tiggers,
