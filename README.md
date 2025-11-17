@@ -110,7 +110,7 @@ db-dump.bat --ONE db1 db2 db3    → one combined SQL for selected DBs
 * You can also dump remote hosts (not only database server on local PC), specifying
 the hostname/IP and in the `%HOST%`/`%PORT%` variables.
 * Users and grants are dumped automatically and usually prepended to the overall dump (if not skipped).
-But you can also run `dump-users-and-grants.bat` separately to get the list of all non-system users and
+But you can also run stand-alone [`dump-users-and-grants.bat`](dump-users-and-grants.bat) separately to get the list of all non-system users and
 their privileges/grants into SQL file, ready for import into another MySQL/MariaDB database.
 
 ---
