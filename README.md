@@ -91,7 +91,7 @@ MySQL-migration-tools/
 
 ---
 
-# ⚙️ Usage
+# ⚙️ Usage (how to run it)
 
 ## 🪟 Windows
 
