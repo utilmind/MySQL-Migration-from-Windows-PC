@@ -262,11 +262,7 @@ If **`dbTablePrefix` is not defined** in the configuration (in script body or `.
 or **defined but empty**,  
 and **no explicit table list is provided**,  
 
-then **all** tables from the database are processed (except `_backup_` tables):
-
-```bash
-./optimize-tables.sh production
-```
+then **all** tables from the database are processed (except `_backup_` tables).
 
 ### ✔ How to run it
 
