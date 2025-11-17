@@ -119,7 +119,7 @@ their privileges/grants into SQL file, ready for import into another MySQL/Maria
 
 ### Database Dumps
 
-Single file (recommended).
+Single file (recommended).<br />
 Configuration taken from default [`bash/.sample.credentials.sh`]`.credentials.sh`:
 
 ```bash
