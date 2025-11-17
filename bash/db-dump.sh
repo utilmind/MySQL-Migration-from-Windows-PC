@@ -42,7 +42,7 @@ set -euo pipefail
 # CONFIGURATION
 # Optionally specify table prefixes to export.
 # Specify them only as bash array, even if only one prefix is used. Strings are not accepted.
-# This overrides \$dbTablePrefix specified in ".configuration-name.credentials.sh", if uncommented.
+# You may define dbTablePrefix here, but values from the `.[configuration.]credentials.sh` file take priority, if specified there.
 #dbTablePrefix=('table_prefix1_' 'table_prefix2_' 'bot_' 'email_' 'user_' 'order_')
 
 
