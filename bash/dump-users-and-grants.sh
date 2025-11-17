@@ -64,7 +64,7 @@ TMPGRANTS=""
 INCLUDE_SYSTEM_USERS=0
 
 # Optional user name prefixes filter (User LIKE 'PREFIX%')
-# Can hold multiple prefixes: ("mydata" "anotherdata" ...)
+# Can hold multiple prefixes: ("mydb" "anotherdb" ...)
 USER_PREFIXES=()
 
 # System users list (SQL fragment inside NOT IN (...))
@@ -92,9 +92,9 @@ Options:
   --user-prefix LIST   Export only users whose *name* starts with one of
                        the prefixes in LIST.
                        LIST can be:
-                         - single prefix: "mydata"
-                         - several prefixes: "mydata anotherdata"
-                       (User LIKE 'mydata%' OR User LIKE 'anotherdata%'; host is not filtered).
+                         - single prefix: "mydb"
+                         - several prefixes: "mydb anotherdb"
+                       (User LIKE 'mydb%' OR User LIKE 'anotherdb%'; host is not filtered).
   --include-system-users
                        Also export system / internal users
                        (root, mysql.sys, mariadb.sys, etc.).
