@@ -140,7 +140,7 @@ Dumps all into a single SQL file. Current date in **YYYYMMDD** format substitute
 ./db-dump.sh "/backups/db-@.sql" production
 ```
 
-**View help and the list of available options:**
+View help and the list of available options:
 
 ```bash
 ./db-dump.sh --help
