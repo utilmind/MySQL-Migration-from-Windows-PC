@@ -284,7 +284,7 @@ then **all** tables from the database are processed (except `_backup_` tables):
 #### With explicit table list:
 
 ```bash
-./optimize-tables.sh production "silk_session silk_order silk_log"
+./optimize-tables.sh production "session order user log"
 ```
 
 ---
