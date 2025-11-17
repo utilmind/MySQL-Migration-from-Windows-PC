@@ -11,7 +11,7 @@ The goal is to create a dump that can be easily imported into **any** MySQL or M
 - DEFINER users  
 - privileges (grants)  
 - table options (charsets, collations, row formats)  
-- data in its *original* encoding, regardless of server defaults  
+- data in its *original* encoding, regardless of original server defaults  
 
 These tools let you safely move databases between MySQL/MariaDB servers of different versions, OSes, collation defaults, etc.
 They also perfect for quick deployments of an empty database structure with all initial triggers and their definers (users).
