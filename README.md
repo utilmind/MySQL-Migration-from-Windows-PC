@@ -219,8 +219,6 @@ changes or data fixes, to quickly roll back everything if something goes wrong, 
 
 This tool is ideal for scheduled maintenance (cron) or manual performance checks.
 
----
-
 ### ✔ How it selects tables
 
 The script supports **three independent modes**:
