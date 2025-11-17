@@ -11,11 +11,13 @@
 #      - Supports per-environment configuration files.
 #      - Supports selective table exports:
 #          * explicit table list (3rd parameter), OR
-#          * prefix-based selection via dbTablePrefix.
+#          * prefix-based selection via dbTablePrefix, OR
+#          * all tables if no dbTablePrefix and no explicit list are provided.
 #      - Generates reproducible UTF-8 dumps with consistent CREATE TABLE clauses.
 #      - Optionally post-processes dumps with Python to restore original
 #        charset/collation/table options for cross-server imports.
-#      - Compresses resulting dump into .rar archive.
+#      - Compresses resulting dump into RAR archive (if available), otherwise
+#        into .tar.gz archive, with rotation of previous archives.
 #      - Optionally runs table optimization via "optimize-tables.sh" (can be
 #        disabled with --skip-optimize).
 #
@@ -31,6 +33,9 @@
 #                + provide missing details (server defaults) to the 'CREATE TABLE' statements
 #                  (to solve issues with collations on import).
 #                (These features require Python3+ installed.)
+#    17.11.2025: If dbTablePrefix is not defined and no explicit table list is
+#                provided, export all tables from the database (except *_backup_*).
+#                Implement RAR-or-gzip archiving with rotation of previous archives.
 ###############################################################################
 set -euo pipefail
 
@@ -177,6 +182,13 @@ Arguments:
         Example:
             $scriptName dump.sql my-config "table1 table2 table_user stats"
 
+Behavior:
+    - If explicit table list is provided (3rd parameter), only these tables are exported.
+    - Else, if dbTablePrefix is defined in credentials, only tables matching these prefixes
+      (and not ending with '_backup_') are exported.
+    - Else, if dbTablePrefix is not defined and no explicit table list is provided,
+      all tables from the database (except *_backup_*) are exported.
+
     DB credentials file example (.credentials.sh or .configuration-name.credentials.sh):
 
         #!/bin/bash
@@ -319,8 +331,8 @@ if [ "$run_optimize" -eq 1 ]; then
                 "$optScript" "" "$tablesListRaw"
             fi
         else
-            # No explicit table list: rely on dbTablePrefix inside optimize-tables.sh
-            log_info "Running table optimization (prefix-based) via $optScript ..."
+            # No explicit table list: rely on dbTablePrefix or internal logic of optimize-tables.sh
+            log_info "Running table optimization (prefix-based or full-DB) via $optScript ..."
             if [ -n "$dbConfigName" ]; then
                 "$optScript" "$dbConfigName"
             else
@@ -373,46 +385,50 @@ if [ -n "$tablesListRaw" ]; then
     printf "%s\n" "${explicitTables[@]}" > "$allTablesFilename"
 
 else
-    # ---- BUILD TABLE FILTER (PREFIXES) ----
+    # ---- DETERMINE FILTER: PREFIXES OR ALL TABLES ----
 
-    if [ -z "${dbTablePrefix+x}" ]; then
-        log_error "dbTablePrefix is not defined in the configuration and no explicit table list was provided."
-        echo "Either define dbTablePrefix in the credentials file or pass explicit tables as the third parameter."
-        exit 1
+    where_meta="TABLE_SCHEMA = '$dbName'"
+    where_list="table_schema='$dbName'"
+
+    if [ -n "${dbTablePrefix+x}" ]; then
+        like_clause=""
+        for p in "${dbTablePrefix[@]}"; do
+            esc=${p//\'/\'\'}     # escape single quotes
+            esc=${esc//_/\\_}     # make '_' literal in LIKE
+            if [ -z "$like_clause" ]; then
+                like_clause="(TABLE_NAME LIKE '${esc}%')"
+            else
+                like_clause="$like_clause OR (TABLE_NAME LIKE '${esc}%')"
+            fi
+        done
+        where_meta="$where_meta AND ($like_clause)"
+        # For the export query we can safely reuse the same expression (case-insensitive)
+        where_list="$where_list AND ($like_clause)"
+        log_info "dbTablePrefix is defined; exporting only tables matching configured prefixes."
+    else
+        log_info "dbTablePrefix is not defined; exporting all tables from database '$dbName' (excluding *_backup_*)."
     fi
 
-    like_clause=""
-    for p in "${dbTablePrefix[@]}"; do
-        esc=${p//\'/\'\'}     # escape single quotes
-        esc=${esc//_/\\_}     # make '_' literal in LIKE
-        if [ -z "$like_clause" ]; then
-            like_clause="(table_name LIKE '${esc}%')"
-        else
-            like_clause="$like_clause OR (table_name LIKE '${esc}%')"
-        fi
-    done
-    like_clause="($like_clause)"
+    # Exclude backup tables in any case
+    where_meta="$where_meta AND TABLE_NAME NOT LIKE '%_backup_%'"
+    where_list="$where_list AND table_name NOT LIKE '%_backup_%'"
 
-    # ---- GENERATE TABLE METADATA TSV (BY PREFIX) ----
+    # ---- GENERATE TABLE METADATA TSV ----
     log_info "Dumping table metadata to '$tablesMetaFilename' ..."
     if ! mysql "${mysqlConnOpts[@]}" -N \
         -e "SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE, ROW_FORMAT, TABLE_COLLATION
             FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA = '$dbName'
-              AND ${like_clause}
-              AND TABLE_NAME NOT LIKE '%_backup_%'
+            WHERE ${where_meta}
             ORDER BY TABLE_SCHEMA, TABLE_NAME;" > "$tablesMetaFilename"
     then
         log_warn "Failed to dump table metadata. TSV will be missing, CREATE TABLE enhancement may be skipped."
     fi
 
-    # ---- PREPARE EXPORT TABLE LIST (BY PREFIX) ----
+    # ---- PREPARE EXPORT TABLE LIST ----
     mysql "${mysqlConnOpts[@]}" -N "$dbName" \
         -e "SELECT table_name
             FROM INFORMATION_SCHEMA.TABLES
-            WHERE table_schema='$dbName'
-              AND ${like_clause}
-              AND table_name NOT LIKE '%_backup_%'
+            WHERE ${where_list}
             ORDER BY table_name" > "$allTablesFilename"
 fi
 
@@ -454,18 +470,42 @@ else
 fi
 
 
-# ---------------- ARCHIVE MAINTENANCE ----------------
+# -------------- ARCHIVE MAINTENANCE ---------------
 
-# First of all -- backup previous file, if it exists. Okay if it will overwrite previous file.
-if [ -f "$targetFilename.rar" ]; then
-    mv "$targetFilename.rar" "$targetFilename.previous.rar"
+archiveFile=""
+archivePrev=""
+
+if command -v rar >/dev/null 2>&1; then
+    # Use RAR with rotation
+    archiveFile="${targetFilename%.sql}.rar"
+    archivePrev="${targetFilename%.sql}.previous.rar"
+
+    if [ -f "$archiveFile" ]; then
+        log_info "Previous RAR archive found. Rotating to '$archivePrev' ..."
+        mv -f "$archiveFile" "$archivePrev"
+    fi
+
+    log_info "RAR found. Archiving dump as '$archiveFile' ..."
+    # -m5 = best compression, -ep = do not store paths
+    rar a -m5 -ep "$archiveFile" "$targetFilename"
+    # If you want to delete the original SQL dump after archiving, uncomment the next line:
+    # rm -f "$targetFilename"
+
+else
+    # Fallback to tar+gzip with rotation
+    archiveFile="${targetFilename%.sql}.tar.gz"
+    archivePrev="${targetFilename%.sql}.previous.tar.gz"
+    tarTmp="${targetFilename%.sql}.tar"
+
+    if [ -f "$archiveFile" ]; then
+        log_info "Previous tar.gz archive found. Rotating to '$archivePrev' ..."
+        mv -f "$archiveFile" "$archivePrev"
+    fi
+
+    log_info "RAR not found. Using tar+gzip, archiving dump as '$archiveFile' ..."
+    tar -cf "$tarTmp" "$targetFilename"
+    # compression level 9 (best) – good for automated backups
+    gzip -9 -f "$tarTmp"
 fi
 
-# compress with gzip (compression level from 1 to 9, from fast to best)
-# Use 9 (best) for automatic, scheduled backups and 5 (normal) for manual backups, when you need db now.
-#gzip -9 -f "$targetFilename"
-
-rar a -m5 -ep -df "$targetFilename.rar" "$targetFilename"
-sudo chown 660 "$targetFilename.rar" || true
-
-log_ok "Dump finished and archived as '$targetFilename.rar'."
+log_ok "Dump finished and archived as '$archiveFile'."
