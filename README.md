@@ -22,7 +22,7 @@ They also perfect for quick deployments of an empty database structure with all 
 ✔  Transfers all users and their grants/privileges (excluding system users like *root*, *mariadb.sys*, etc).<br />
 ✔  Ignores system databases (*mysql*, *sys*, *information_schema*, *performance_schema*).<br />
 ✔  Dumps either separate databases into individual files, or all databases into a single dump (`--one` option in Windows).<br />
-✔  Can remove legacy MySQL [compatibility comments](#about-mysql-compatibility-comments) that interfere with developer comments inside triggers.<br />
+✔  Can remove legacy MySQL [compatibility comments](#-about-mysql-compatibility-comments) that interfere with developer comments inside triggers.<br />
 ✔  Enhances the dump with `CREATE TABLE` statements containing **full original table definitions**, including character sets, collations,
 and row formats — ensuring data imports correctly even on servers with different defaults. This avoids issues such
 as “duplicate entry” errors caused by differing collations.
