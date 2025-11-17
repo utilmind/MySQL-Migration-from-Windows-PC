@@ -193,16 +193,24 @@ or:
 
 # 💬 About MySQL Compatibility Comments
 
-MySQL and MariaDB dumps often include “versioned” comments such as:
+MySQL and MariaDB dumps often include “versioned” compatibility comments such as:
 
 ```sql
 /*!50003 CREATE*/ /*!50017 DEFINER=`user`@`host`*/ /*!50003 TRIGGER ... END */;
 ```
 
-These blocks execute only when the server version is high enough.  
-They can break imports when nested with developer comments.
+These `/*!xxxxx ... */` blocks are executed only on servers with a version number
+equal or higher than the encoded one (e.g., `50003` → MySQL 5.0.3). On older versions,
+they’re treated as normal comments and ignored.
 
-`strip-mysql-compatibility-comments.py` removes only these wrappers, preserving real comments.
+This mechanism was meant for backward compatibility between MySQL versions, but on
+modern MySQL/MariaDB setups, it’s usually unnecessary — and can even cause syntax errors.
+For example, if a trigger body contains a developer comment `/* ... */` inside
+a versioned block, it may conflict with the outer wrapper and break the SQL import.
+
+The [`strip-mysql-compatibility-comments.py`](strip-mysql-compatibility-comments.py)
+**removes these compatibility wrappers** while preserving the real developers comments
+in the function/trigger bodies.
 
 Additionally, if a table metadata provided in TSV format, it will also
 normalize `CREATE TABLE` statements to include ENGINE, ROW_FORMAT,
