@@ -296,7 +296,7 @@ if [ -s "$myisamTablesFilename" ]; then
         "$dbName" \
         $(cat "$myisamTablesFilename")
 else
-    log_info "No MyISAM tables selected for optimization."
+    log_info "No MyISAM to optimize."
 fi
 
 if [ -s "$innoDBTablesFilename" ]; then
@@ -306,7 +306,7 @@ if [ -s "$innoDBTablesFilename" ]; then
         "$dbName" \
         $(cat "$innoDBTablesFilename")
 else
-    log_info "No InnoDB tables selected for analyze."
+    log_info "No InnoDB tables to analyze."
 fi
 
 log_ok "Table optimization/analyze completed."
