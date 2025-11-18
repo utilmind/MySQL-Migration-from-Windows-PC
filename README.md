@@ -94,8 +94,8 @@ MySQL-migration-tools/
 # ⚙️ Usage (how to run it)
 
 The main difference between the Windows and Linux versions of `db-dump` script is that
-* the Windows version is designed for complete migration of all databases from one PC to another (make exact copy of all local databases), while the purpose of
-* the Linux version is to create dumps of *one* specific database using the task scheduler/crontab.
+* the **Windows** version is designed for complete migration of all databases from one PC to another (make exact copy of all local databases), while the purpose of
+* the **Linux** version is to create dumps of *one* specific database using the task scheduler/crontab.
 
 ## 🪟 Windows
 
