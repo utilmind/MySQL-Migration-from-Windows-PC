@@ -453,6 +453,29 @@ mysqldump \
     > "$targetFilename"
 
 
+# Add a "USE [database-name]" statement at the top of the dump.
+#
+#   Normally this can be achieved by using `--databases [db_name ...] --no-create-db`
+#   options of `mysqldump`, which emit a `USE` statement for each dumped database.
+#   Unfortunately, when `--databases` is used, every argument after it is treated
+#   as a database name, not as a table name. That means we cannot simultaneously
+#   use `--databases` and specify an explicit list of tables to dump.
+#   This script is designed to dump only a selected subset of tables from a single
+#   database, so we stay in the "single db + tables" mode and prepend `USE` manually.
+#
+#   The header below is mostly for convenience: it makes importing the dump
+#   on another server easier, because the target database is selected automatically.
+#
+tmpWithUse="${targetFilename%.sql}.with_use.sql"
+{
+  printf '%s\n\nUSE `%s`;\n\n' \
+    '-- Dump created with DB migration tools ( https://github.com/utilmind/MySQL-migration-tools )' \
+    "$dbName"
+  cat "$targetFilename"
+} > "$tmpWithUse"
+mv "$tmpWithUse" "$targetFilename"
+
+
 # ---------------- POST-PROCESS DUMP WITH PYTHON ----------------
 
 # strip-mysql-compatibility-comments.py:
