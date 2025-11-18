@@ -453,48 +453,64 @@ mysqldump \
     > "$targetFilename"
 
 
-# Add a "USE [database-name]" statement at the top of the dump.
-#
-#   Normally this can be achieved by using `--databases [db_name ...] --no-create-db`
-#   options of `mysqldump`, which emit a `USE` statement for each dumped database.
-#   Unfortunately, when `--databases` is used, every argument after it is treated
-#   as a database name, not as a table name. That means we cannot simultaneously
-#   use `--databases` and specify an explicit list of tables to dump.
-#   This script is designed to dump only a selected subset of tables from a single
-#   database, so we stay in the "single db + tables" mode and prepend `USE` manually.
-#
-#   The header below is mostly for convenience: it makes importing the dump
-#   on another server easier, because the target database is selected automatically.
-#
-tmpWithUse="${targetFilename%.sql}.with_use.sql"
-{
-  printf '%s\n\nUSE `%s`;\n\n' \
-    '-- Dump created with DB migration tools ( https://github.com/utilmind/MySQL-migration-tools )' \
-    "$dbName"
-  cat "$targetFilename"
-} > "$tmpWithUse"
-mv "$tmpWithUse" "$targetFilename"
-
-
 # ---------------- POST-PROCESS DUMP WITH PYTHON ----------------
 
 # strip-mysql-compatibility-comments.py:
 #   * removes old-version /*!xxxxx ... */ compatibility comments
 #   * uses TSV metadata to enrich CREATE TABLE with missing ENGINE / CHARSET / COLLATION
+#   * optionally prepends a header and a USE `db_name`; statement when --db-name is used
 postProcessor="$scriptDir/strip-mysql-compatibility-comments.py"
+need_fallback_use_header=0
 
 if [ -f "$postProcessor" ]; then
     if command -v python3 >/dev/null 2>&1; then
         tmpProcessed="${targetFilename%.sql}.clean.sql"
         log_info "Post-processing dump with Python script: $(basename "$postProcessor")"
-        python3 "$postProcessor" "$targetFilename" "$tmpProcessed" "$tablesMetaFilename"
-        mv "$tmpProcessed" "$targetFilename"
-        log_ok "Dump post-processing completed."
+        python3 "$postProcessor" \
+            --db-name "$dbName" \
+            "$targetFilename" \
+            "$tmpProcessed" \
+            "$tablesMetaFilename"
+        if [ $? -eq 0 ]; then
+            mv "$tmpProcessed" "$targetFilename"
+            log_ok "Dump post-processing completed."
+        else
+            log_error "Python post-processing failed; falling back to simple USE header injection."
+            # make sure we don't leave partial tmp file around if python failed mid-way
+            rm -f "$tmpProcessed"
+            need_fallback_use_header=1
+        fi
     else
-        log_warn "Python3 is not installed; skipping dump post-processing."
+        log_warn "Python3 is not installed; falling back to simple USE header injection."
+        need_fallback_use_header=1
     fi
 else
-    log_warn "Dump post-processing script not found: $postProcessor; skipping."
+    log_warn "Dump post-processing script not found: $postProcessor; falling back to simple USE header injection."
+    need_fallback_use_header=1
+fi
+
+if [ "$need_fallback_use_header" -eq 1 ]; then
+    # Add a "USE [database-name]" statement at the top of the dump.
+    #
+    #   Normally this can be achieved by using `--databases [db_name ...] --no-create-db`
+    #   options of `mysqldump`, which emit a `USE` statement for each dumped database.
+    #   Unfortunately, when `--databases` is used, every argument after it is treated
+    #   as a database name, not as a table name. That means we cannot simultaneously
+    #   use `--databases` and specify an explicit list of tables to dump.
+    #   This script is designed to dump only a selected subset of tables from a single
+    #   database, so we stay in the "single db + tables" mode and prepend `USE` manually.
+    #
+    #   The header below is mostly for convenience: it makes importing the dump
+    #   on another server easier, because the target database is selected automatically.
+    #
+    tmpWithUse="${targetFilename%.sql}.with_use.sql"
+    {
+      printf '%s\n\nUSE `%s`;\n\n' \
+        '-- Dump created with DB migration tools ( https://github.com/utilmind/MySQL-migration-tools )' \
+        "$dbName"
+      cat "$targetFilename"
+    } > "$tmpWithUse"
+    mv "$tmpWithUse" "$targetFilename"
 fi
 
 

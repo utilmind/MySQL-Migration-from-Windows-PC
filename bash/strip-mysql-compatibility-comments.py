@@ -30,13 +30,18 @@ normalize CREATE TABLE statements to include ENGINE, ROW_FORMAT,
 DEFAULT CHARSET and COLLATE according to the original server
 metadata extracted from information_schema.TABLES.
 
+Optionally provide a database name via the --db-name / --db option.
+In that case the script will prepend the following lines at
+the very top of the output dump:     USE `your_db_name`;
+
 Usage:
-    python strip-mysql-compatibility-comments.py input.sql output.sql [tables-meta.tsv]
+    python strip-mysql-compatibility-comments.py [--db-name DB_NAME] input.sql output.sql [tables-meta.tsv]
 """
 
 import os
 import re
 import sys
+import argparse
 from typing import Tuple, Optional, Dict, Any
 
 
@@ -404,10 +409,12 @@ def process_dump_stream(
     version_threshold: int = 80000,
     table_meta: Optional[Dict[str, Dict[str, Any]]] = None,
     default_schema: Optional[str] = None,
+    db_name: Optional[str] = None,
 ) -> None:
     """
     Stream-process input dump:
 
+    - write a header line and optional USE `db_name`; at the very top
     - read line by line
     - for each '/*!<digits>' block, read until its matching '*/'
       (across multiple lines, with nested '/* ... */' support)
@@ -447,6 +454,18 @@ def process_dump_stream(
 
     with open(in_path, "r", encoding="utf-8", errors="replace") as fin, \
          open(out_path, "w", encoding="utf-8", errors="replace") as fout:
+
+        fout.write(
+            "-- Dump created with DB migration tools ( "
+            "https://github.com/utilmind/MySQL-migration-tools )\n"
+        )
+
+        if db_name:
+            # If a database name is provided, also select it explicitly.
+            fout.write(f"\nUSE `{db_name}`;\n\n")
+        else:
+            # Just add a blank line separator if no db_name is given.
+            fout.write("\n")
 
         while True:
             line = fin.readline()
@@ -544,17 +563,45 @@ def process_dump_stream(
 
 
 def main() -> None:
-    if len(sys.argv) not in (3, 4):
-        print(
-            "Usage:\n"
-            "  python strip-mysql-compatibility-comments.py input.sql output.sql [tables-meta.tsv]",
-            file=sys.stderr,
+    parser = argparse.ArgumentParser(
+        description=(
+            "Stream-process a MySQL/MariaDB dump: remove versioned compatibility "
+            "comments and optionally normalize CREATE TABLE statements using table metadata."
         )
-        sys.exit(1)
+    )
+    parser.add_argument(
+        "--db-name",
+        "--db",
+        dest="db_name",
+        help=(
+            "Optional database name to prepend a 'USE `DB_NAME`;' statement at the "
+            "top of the output dump."
+        ),
+    )
+    parser.add_argument(
+        "input",
+        help="Path to the input SQL dump file.",
+    )
+    parser.add_argument(
+        "output",
+        help="Path to the output (processed) SQL dump file.",
+    )
+    parser.add_argument(
+        "tables_meta",
+        nargs="?",
+        default=None,
+        help=(
+            "Optional TSV file with table metadata "
+            "(TABLE_SCHEMA, TABLE_NAME, ENGINE, ROW_FORMAT, TABLE_COLLATION)."
+        ),
+    )
 
-    in_path = sys.argv[1]
-    out_path = sys.argv[2]
-    tsv_path = sys.argv[3] if len(sys.argv) == 4 else None
+    args = parser.parse_args()
+
+    in_path = args.input
+    out_path = args.output
+    tsv_path = args.tables_meta
+    db_name = args.db_name
 
     if not os.path.isfile(in_path):
         print(f"Input file not found: {in_path}", file=sys.stderr)
@@ -572,6 +619,7 @@ def main() -> None:
         version_threshold=80000,
         table_meta=table_meta,
         default_schema=default_schema,
+        db_name=db_name,
     )
 
 
