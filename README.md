@@ -93,6 +93,8 @@ MySQL-migration-tools/
 
 # ⚙️ Usage (how to run it)
 
+The main difference between the Windows and Linux versions of `db-dump` script is that the Windows version is designed for complete migration of all databases from one computer to another, while the purpose of the Linux version is to create dumps of *one* specific database using the task scheduler/crontab.
+
 ## 🪟 Windows
 
 ### Database Dumps with Users
@@ -119,20 +121,20 @@ their privileges/grants into SQL file, ready for import into another MySQL/Maria
 
 ## 🐧 Linux
 
-### Database Dumps
+### Database Dumps (of single database)
 
 **Single file (recommended).**<br />
 Configuration taken from default [`.credentials.sh`](bash/.sample.credentials.sh):
 
 ```bash
-./db-dump.sh /backups/all-dbs.sql
+./db-dump.sh /backups/all-tables.sql
 ```
 
 **Using configuration profile.**<br />
 This one takes credentials from [`.production.credentials.sh`](bash/.sample.credentials.sh):
 
 ```bash
-./db-dump.sh /backups/all-dbs.sql production
+./db-dump.sh /backups/all-tables.sql production
 ```
 
 **Date-stamped filename.**<br />
