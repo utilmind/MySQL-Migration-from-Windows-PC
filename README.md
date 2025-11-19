@@ -339,7 +339,7 @@ metadata extracted from information_schema.TABLES.
 
 ---
 
-## Time zone issues
+## 🕰️ Time zone issues (possibly)
 
 MySQL and MariaDB dumps sometimes contain statements like:
 
@@ -370,11 +370,11 @@ SET time_zone = '+00:00';
 
 Because numeric offsets always work and **do not require** time zone tables.
 However we can’t automatically fix the time zones other than UTC due to summer and winter time shifts and various local political decisions.
-So, **if you want to keep using named time zones, you must load the system time zone database into MySQL or MariaDB**.
+So, **if you want to keep using *named* time zones, you must load the system time zone database into MySQL or MariaDB**.
 
 ---
 
-## Windows users (MariaDB / MySQL)
+## 🪟 Windows users
 
 MariaDB for Windows **does not include** time zone tables.
 To enable named time zones, download a prebuilt SQL file from the official MariaDB tzdata repository and import it manually.
@@ -407,7 +407,7 @@ will work correctly on Windows.
 
 ---
 
-## Linux / Unix users
+## 🐧 Linux / Unix users
 
 On Linux/Unix, time zone files are usually available at:
 
