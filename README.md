@@ -360,35 +360,27 @@ It automatically replaces all
 
 ```sql
 SET time_zone = 'UTC';
-```
-
 to
-
-```sql
 SET time_zone = '+00:00';
 ```
 
 Because numeric offsets always work and **do not require** time zone tables.
-However we can’t automatically fix the time zones other than UTC due to summer and winter time shifts and various local political decisions.
+However, we cannot reliably automatically convert between named non-UTC zones due to daylight saving time changes and various local political decisions.
 So, **if you want to keep using *named* time zones, you must load the system time zone database into MySQL or MariaDB**.
 
----
-
-## 🪟 Windows users
+### 🪟 Windows users
 
 MariaDB for Windows **does not include** time zone tables.
 To enable named time zones, download a prebuilt SQL file from the official MariaDB tzdata repository and import it manually.
 
-### Official download location:
+#### Official download location:
 
 **https://downloads.mariadb.org/rest-api/mariadb/tzdata/**
 
 Example (2024a release):
 
-- POSIX version (recommended):  
-  **https://downloads.mariadb.org/rest-api/mariadb/tzdata/2024a/posix/timezone_posix.sql**
-- Full version:  
-  **https://downloads.mariadb.org/rest-api/mariadb/tzdata/2024a/full/timezone_full.sql**
+- POSIX version (recommended): **https://downloads.mariadb.org/rest-api/mariadb/tzdata/2024a/posix/timezone_posix.sql**
+- Full version: **https://downloads.mariadb.org/rest-api/mariadb/tzdata/2024a/full/timezone_full.sql**
 
 Import the file:
 
@@ -405,9 +397,7 @@ SET time_zone = 'America/New_York';
 
 will work correctly on Windows.
 
----
-
-## 🐧 Linux / Unix users
+### 🐧 Linux / Unix users
 
 On Linux/Unix, time zone files are usually available at:
 
@@ -415,7 +405,7 @@ On Linux/Unix, time zone files are usually available at:
 /usr/share/zoneinfo
 ```
 
-MariaDB/MySQL provide utilities that convert this directory into SQL:
+MariaDB/MySQL provide utilities that convert *zoneinfo* into SQL:
 
 ```bash
 # MySQL or older MariaDB:
