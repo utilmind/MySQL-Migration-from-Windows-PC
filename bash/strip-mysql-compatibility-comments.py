@@ -216,6 +216,8 @@ DROP_VIEW_RE = re.compile(
 # Handles arbitrary spaces and one or more semicolons at the end of the line.
 TIME_ZONE_UTC_RE = re.compile(
     r'(?im)^(\s*SET\s+time_zone\s*=\s*)([\'"])UTC\2(\s*;+\s*)$'
+    # This one worked too, but we decided to check " quotes too for sure. Although in this case we should to correctly count groups and replace \3 to \2 in the use case below.
+    #r"(?im)^(\s*SET\s+time_zone\s*=\s*)'UTC'(\s*;+\s*)$"
 )
 
 
@@ -227,7 +229,7 @@ def replace_utc_time_zone(text: str) -> str:
     This is done in a multiline-safe manner and should not affect data payloads,
     because the pattern is anchored to the beginning of the line.
     """
-    return TIME_ZONE_UTC_RE.sub(r"\1'+00:00'\2", text)
+    return TIME_ZONE_UTC_RE.sub(r"\1'+00:00'\3", text)
 
 
 def enhance_create_table(
