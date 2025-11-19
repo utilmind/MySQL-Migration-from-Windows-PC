@@ -369,7 +369,7 @@ SET time_zone = '+00:00';
 ```
 
 Because numeric offsets always work and **do not require** time zone tables.
-However we can’t automatically fix other time zones due to summer and winter time shifts and various local political decisions.
+However we can’t automatically fix the time zones other than UTC due to summer and winter time shifts and various local political decisions.
 So, **if you want to keep using named time zones, you must load the system time zone database into MySQL or MariaDB**.
 
 ---
