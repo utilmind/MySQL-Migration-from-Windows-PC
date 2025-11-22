@@ -42,9 +42,10 @@ import os
 import re
 import sys
 import argparse
+from typing import Tuple, Optional, Dict, Any
 
 
-def find_conditional_end(comment):
+def find_conditional_end(comment: str) -> Tuple[Optional[int], Optional[int]]:
     """
     Given a string that starts with a versioned comment:
 
@@ -96,7 +97,7 @@ def find_conditional_end(comment):
     return end_pos, digits_end
 
 
-def report_progress(processed_bytes, total_size, last):
+def report_progress(processed_bytes: int, total_size: int, last: float) -> float:
     """
     Print progress to stderr on a single line using carriage return.
     Returns the updated 'last' value.
@@ -104,10 +105,10 @@ def report_progress(processed_bytes, total_size, last):
     if total_size <= 0:
         percent = 100.0
     else:
-        percent = (processed_bytes / float(total_size)) * 100.0
+        percent = (processed_bytes / total_size) * 100
 
     if percent - last >= 1.0 or percent == 100.0:
-        sys.stderr.write("\r{0:5.1f}%...".format(percent))
+        sys.stderr.write(f"\r{percent:5.1f}%...")
         sys.stderr.flush()
         return percent
 
@@ -117,7 +118,7 @@ def report_progress(processed_bytes, total_size, last):
 # --- Table metadata loading and CREATE TABLE enhancement ----------------------
 
 
-def load_table_metadata(tsv_path):
+def load_table_metadata(tsv_path: str) -> Tuple[Dict[str, Dict[str, Any]], Optional[str]]:
     """
     Load table metadata from TSV file produced by a query like:
 
@@ -138,17 +139,17 @@ def load_table_metadata(tsv_path):
         default_schema: if all rows share the same TABLE_SCHEMA,
                         this schema name is returned, otherwise None.
     """
-    meta = {}
+    meta: Dict[str, Dict[str, Any]] = {}
     schemas = set()
 
     if not os.path.isfile(tsv_path):
         sys.stderr.write(
-            "\n[WARN] Table metadata TSV not found: {0}. "
-            "CREATE TABLE enhancement will be skipped.\n".format(tsv_path)
+            f"\n[WARN] Table metadata TSV not found: {tsv_path}. "
+            f"CREATE TABLE enhancement will be skipped.\n"
         )
         return meta, None
 
-    sys.stderr.write("\nLoading table metadata from '{0}'...\n".format(tsv_path))
+    sys.stderr.write(f"\nLoading table metadata from '{tsv_path}'...\n")
 
     with open(tsv_path, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -162,7 +163,7 @@ def load_table_metadata(tsv_path):
             schema, table, engine, row_format, table_collation = parts[:5]
 
             schemas.add(schema)
-            key = "{0}.{1}".format(schema, table)
+            key = f"{schema}.{table}"
 
             # Normalize engine
             eng = (engine or "").strip()
@@ -191,10 +192,10 @@ def load_table_metadata(tsv_path):
     if len(schemas) == 1:
         default_schema = next(iter(schemas))
 
-    msg = "Loaded metadata for {0} tables".format(len(meta))
-    if default_schema:
-        msg += " in schema {0!r}".format(default_schema)
-    sys.stderr.write(msg + "\n")
+    sys.stderr.write(
+        f"Loaded metadata for {len(meta)} tables"
+        f"{(f' in schema {default_schema!r}') if default_schema else ''}.\n"
+    )
     return meta, default_schema
 
 
@@ -218,7 +219,7 @@ TIME_ZONE_UTC_RE = re.compile(
 )
 
 
-def replace_utc_time_zone(text):
+def replace_utc_time_zone(text: str) -> str:
     """
     Replace any standalone "SET time_zone = 'UTC';" statement (with arbitrary
     spacing and one or more semicolons) with "SET time_zone = '+00:00';".
@@ -229,7 +230,12 @@ def replace_utc_time_zone(text):
     return TIME_ZONE_UTC_RE.sub(r"\1'+00:00'\3", text)
 
 
-def enhance_create_table(text, state, table_meta, default_schema):
+def enhance_create_table(
+    text: str,
+    state: Dict[str, Any],
+    table_meta: Dict[str, Dict[str, Any]],
+    default_schema: Optional[str],
+) -> str:
     """
     Enhance CREATE TABLE statements in the given text chunk using table_meta.
 
@@ -256,7 +262,7 @@ def enhance_create_table(text, state, table_meta, default_schema):
     if skip_for_table is None:
         skip_for_table = set()
 
-    def append_chunk(s):
+    def append_chunk(s: str) -> None:
         out_lines.append(s)
 
     for line in text.splitlines(keepends=True):
@@ -300,17 +306,14 @@ def enhance_create_table(text, state, table_meta, default_schema):
                 # Resolve metadata key (schema.table)
                 schema_to_use = current_schema or default_schema
                 if schema_to_use:
-                    key = "{0}.{1}".format(schema_to_use, current_table)
+                    key = f"{schema_to_use}.{current_table}"
                 else:
                     # No schema info: try by table name uniqueness
                     matches = [
                         k for k in table_meta.keys()
-                        if k.endswith(".{0}".format(current_table))
+                        if k.endswith(f".{current_table}")
                     ]
-                    if len(matches) == 1:
-                        key = matches[0]
-                    else:
-                        key = None
+                    key = matches[0] if len(matches) == 1 else None
 
                 info = table_meta.get(key) if key else None
 
@@ -322,10 +325,10 @@ def enhance_create_table(text, state, table_meta, default_schema):
                     # If metadata looks broken — do not inject NULLs; warn and pass through
                     if not engine or not table_collation:
                         sys.stderr.write(
-                            "\n[WARN] Missing metadata for {0}: ENGINE={1!r}, "
-                            "COLLATION={2!r}. CREATE TABLE kept as-is.\n".format(
-                                key or current_table, engine, table_collation
-                            )
+                            f"\n[WARN] Missing metadata for "
+                            f"{key or current_table}: ENGINE={engine!r}, "
+                            f"COLLATION={table_collation!r}. "
+                            f"CREATE TABLE kept as-is.\n"
                         )
                         append_chunk(full)
                     else:
@@ -357,17 +360,17 @@ def enhance_create_table(text, state, table_meta, default_schema):
                             additions = []
 
                             if not has_engine:
-                                additions.append(" ENGINE={0}".format(engine))
+                                additions.append(f" ENGINE={engine}")
                             if row_format and not has_rowfmt:
-                                additions.append(" ROW_FORMAT={0}".format(row_format))
+                                additions.append(f" ROW_FORMAT={row_format}")
                             if not has_def_charset:
-                                additions.append(" DEFAULT CHARSET={0}".format(charset))
+                                additions.append(f" DEFAULT CHARSET={charset}")
                                 if not has_collate:
-                                    additions.append(" COLLATE={0}".format(table_collation))
+                                    additions.append(f" COLLATE={table_collation}")
                             else:
                                 # DEFAULT CHARSET present; add COLLATE if missing
                                 if not has_collate:
-                                    additions.append(" COLLATE={0}".format(table_collation))
+                                    additions.append(f" COLLATE={table_collation}")
 
                             # Detect newline at the end
                             nl = ""
@@ -391,7 +394,7 @@ def enhance_create_table(text, state, table_meta, default_schema):
                             else:
                                 new_rest_core = rest_core + "".join(additions)
 
-                            new_last_line = "{0}){1}{2}".format(prefix, new_rest_core, nl)
+                            new_last_line = f"{prefix}){new_rest_core}{nl}"
                             lines[-1] = new_last_line
                             full = "".join(lines)
                             append_chunk(full)
@@ -418,13 +421,13 @@ def enhance_create_table(text, state, table_meta, default_schema):
 
 
 def process_dump_stream(
-    in_path,
-    out_path,
-    version_threshold=80000,
-    table_meta=None,
-    default_schema=None,
-    db_name=None,
-):
+    in_path: str,
+    out_path: str,
+    version_threshold: int = 80000,
+    table_meta: Optional[Dict[str, Dict[str, Any]]] = None,
+    default_schema: Optional[str] = None,
+    db_name: Optional[str] = None,
+) -> None:
     """
     Stream-process input dump:
 
@@ -446,12 +449,12 @@ def process_dump_stream(
     last_percent_reported = -1.0
 
     sys.stderr.write(
-        "Removing MySQL compatibility comments from '{0}' ({1:,} bytes)\n"
-        "Saving clean dump to '{2}'...\n".format(in_path, total_size, out_path)
+        f"Removing MySQL compatibility comments from '{in_path}' "
+        f"({total_size:,} bytes)\nSaving clean dump to '{out_path}'...\n"
     )
 
     # State for CREATE TABLE enhancement
-    create_state = {
+    create_state: Dict[str, Any] = {
         "current_schema": default_schema,
         "in_create": False,
         "current_table": None,
@@ -459,7 +462,7 @@ def process_dump_stream(
         "skip_for_table": set(),
     }
 
-    def write_out(chunk):
+    def write_out(chunk: str) -> None:
         """Write chunk to fout, optionally enhancing CREATE TABLE and normalizing time_zone."""
         if not chunk:
             return
@@ -478,7 +481,7 @@ def process_dump_stream(
 
         if db_name:
             # If a database name is provided, also select it explicitly.
-            fout.write("\nUSE `{0}`;\n\n".format(db_name))
+            fout.write(f"\nUSE `{db_name}`;\n\n")
         else:
             # Just add a blank line separator if no db_name is given.
             fout.write("\n")
@@ -578,7 +581,7 @@ def process_dump_stream(
     sys.stderr.flush()
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Stream-process a MySQL/MariaDB dump: remove versioned compatibility "
@@ -620,11 +623,11 @@ def main():
     db_name = args.db_name
 
     if not os.path.isfile(in_path):
-        print("Input file not found: {0}".format(in_path), file=sys.stderr)
+        print(f"Input file not found: {in_path}", file=sys.stderr)
         sys.exit(1)
 
-    table_meta = {}
-    default_schema = None
+    table_meta: Dict[str, Dict[str, Any]] = {}
+    default_schema: Optional[str] = None
 
     if tsv_path is not None:
         table_meta, default_schema = load_table_metadata(tsv_path)
