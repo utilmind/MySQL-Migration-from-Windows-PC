@@ -22,7 +22,7 @@
 #        disabled with --skip-optimize).
 #
 #  Usage:
-#      ./db-dump.sh [--skip-optimize] dump-name.sql [configuration-name] ["table1 table2 ..."]
+#      ./db-dump.sh [no-data] [--skip-optimize] dump-name.sql [configuration-name] ["table1 table2 ..."]
 #
 #  License: MIT
 #  (c) utilmind, 2012-2025
@@ -181,14 +181,14 @@ Usage:
     $scriptName [--skip-optimize] dump-name.sql [configuration-name] ["table1 table2 ..."]
 
 Options:
-    --skip-optimize
-        Do not run optimize-tables.sh before dumping (skip MyISAM OPTIMIZE / InnoDB ANALYZE).
-
     --no-data
         Dump only database structure (no table rows). Additionally, all DROP*
         statements (DROP TABLE / DROP VIEW / DROP TRIGGER / etc.) will be
         removed from the final SQL file to make the schema safer for analysis
         tools and AI without exposing real data.
+
+    --skip-optimize
+        Do not run optimize-tables.sh before dumping (skip MyISAM OPTIMIZE / InnoDB ANALYZE).
 
 Arguments:
     dump-name.sql (Required)
